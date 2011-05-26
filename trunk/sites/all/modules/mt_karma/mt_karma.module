@@ -1,0 +1,207 @@
+<?php
+
+/**
+ * @file
+ *   AMT Karma module file
+ */
+
+/**
+ * Implements hook_block_info().
+ */
+function mt_karma_block_info() {
+  return array(
+    'leaderboard productivity' => array(
+      'info' => t('AMT karma productivity leaderboard'),
+      'cache' => DRUPAL_CACHE_PER_PAGE,
+    ),
+    'leaderboard conformity' => array(
+      'info' => t('AMT karma conformity leaderboard'),
+      'cache' => DRUPAL_CACHE_PER_PAGE,
+    ),
+  );
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function mt_karma_block_view($delta = '') {
+  $block = array();
+  switch ($delta) {
+    case 'leaderboard productivity':
+      $block['subject'] = t('Productivity Leaderboard');
+      $block['content'] = mt_karma_display('mt_karma_top_productivity');
+      break;
+    case 'leaderboard conformity':
+      $block['subject'] = t('Conformity Leaderboard');
+      $block['content'] = mt_karma_display('mt_karma_top_conformity');
+      break;
+  }
+  return $block;
+}
+
+
+function mt_karma_top_productivity($task_id, $settings) {
+  $display = isset($settings['mt_karma_productivity_display']) ? $settings['mt_karma_productivity_display'] : 10;
+
+  $query = db_select('mt_assignment', 'a', array('fetch' => PDO::FETCH_ASSOC));
+  $query->innerJoin('mt_task_hit', 'h', 'a.hit_id=h.hit_id');
+  $query->innerJoin('mt_worker', 'w', 'w.worker_id=a.worker_id');  // in order to find display_name
+  $query->addField('a', 'worker_id');
+  $query->addField('w', 'display_name');
+  $query->addExpression('COUNT(a.assignment_id)', 'total_hits');
+  $query->where('a.assignment_status=:status AND h.task_id=:task_id', array(':status' => 'Approved', ':task_id' => $task_id));
+  $query->groupBy('a.worker_id', 'w.display_name');
+  $query->orderBy('total_hits', 'DESC');
+  $query->range(0, $display);
+  $result = $query->execute();
+  //$result = db_query("SELECT worker_id, count(a.id) as total_hits FROM {mt_task_assignment} a INNER JOIN {mt_task_hit} h
+  //    ON a.hit_id=h.hit_id WHERE a.assignment_status='app' AND h.task_id=:task_id GROUP BY worker_id ORDER BY count(a.id) DESC",
+  //    array(':task_id' => $task_id), array('fetch' => PDO::FETCH_ASSOC));
+
+  // preparing rows
+  $rows = array();
+  foreach ($result as $record) {
+    $row['name'] = $record['display_name'];
+    $row['points'] = $record['total_hits'];
+    $rows[] = $row;
+  }
+  return $rows;
+}
+
+
+function mt_karma_top_conformity($task_id, $settings) {
+  $display = isset($settings['mt_karma_conformity_display']) ? $settings['mt_karma_conformity_display'] : 10;
+  $neutral_answers = isset($settings['mt_karma_conformity_neutral_answers']) ? explode(',', $settings['mt_karma_conformity_neutral_answers']) : array();
+  $ratio_mode = isset($settings['mt_karma_conformity_ratio']) ? (boolean) $settings['mt_karma_conformity_ratio'] : FALSE;
+  $limit_to_productivity = isset($settings['mt_karma_conformity_limit_to_productivity']) ? (boolean) $settings['mt_karma_conformity_limit_to_productivity'] : FALSE;
+
+  $points = array();
+  $max_points = array();
+
+  $hits = db_query('SELECT hit_id FROM {mt_task_hit} WHERE task_id=:task_id', array(':task_id' => $task_id), array('fetch' => PDO::FETCH_ASSOC));
+  foreach ($hits as $hit) {
+    $hit_id = $hit['hit_id'];
+    $query = db_select('mt_assignment', 'a', array('fetch' => PDO::FETCH_ASSOC));
+    $query->innerJoin('mt_worker', 'w', 'w.worker_id=a.worker_id');
+    $query->addField('w', 'display_name');
+    $query->addField('a', 'answer');
+    $query->where('a.assignment_status=:status AND a.hit_id=:hit_id', array(':status' => 'Approved', ':hit_id' => $hit_id));
+    $results = $query->execute();
+
+    $group = array();
+    foreach($results as $record) {
+      $name = $record['display_name'];
+      $answer_xml = $record['answer'];
+
+      // TODO: test question identifier
+      $answer_dom = simplexml_load_string($answer_xml);
+      //$question = $answer_dom->Answer->QuestionIdentifier;
+      $answer = (string) $answer_dom->Answer[0]->SelectionIdentifier;
+
+      $group[$name] = $answer;
+    }
+
+    // if we have less than 3 answers for the HIT, then there's no conformity.
+    if (count($group) < 3) {
+      continue;
+    }
+
+    // count the number of each type of answer in the group of assignments for a single HIT
+    $answer_group = array_count_values($group);
+    foreach ($group as $name => $answer) {
+      if (!isset($points[$name])) {
+        $points[$name] = 0;
+      }
+      if (!isset($max_points[$name])) {
+        $max_points[$name] = 0;
+      }
+
+      $max_points[$name] += 2 ;
+
+      // if this answer does not agree to any other answers.
+      if ($answer_group[$answer] == 1) {
+        $points[$name] -= 2;
+      }
+      // if some people agree with you, but you give a neutral answer, then no score.
+      else if ($answer_group[$answer] > 1 && in_array($answer, $neutral_answers)) {
+        $points[$name] += 0;
+      }
+      // if some people agree with you (but not majority), and the answer is not neutral, then +1
+      else if ($answer_group[$answer] > 1 && $answer_group[$answer] <= count($group)/2) {
+        $points[$name] += 1;
+      }
+      // if majority people agree with you , and the answer is not neutral, then +2
+      else if ($answer_group[$answer] > 1 && $answer_group[$answer] > count($group)/2) {
+        $points[$name] += 2;
+      }
+      else {
+        assert(FALSE);
+      }
+    }
+
+  } // end of loop all HIT
+
+  // normalize the points based on max points
+  if ($ratio_mode) {
+    foreach ($points as $n => $p) {
+      $points[$n] = round($p/$max_points[$n], 2);
+    }
+  }
+
+  // limit results to only those on top of the productivity leaderboard.
+  if ($limit_to_productivity) {
+    $productivity_rows = mt_karma_top_productivity($task_id, $settings);
+    $p_points = array();
+    foreach ($productivity_rows as $p) {
+      $p_points[$p['name']] = $p['points'];
+    }
+    $points = array_intersect_key($points, $p_points);
+  }
+
+  arsort($points);
+  $points = array_slice($points, 0, $display);
+  $rows = array();
+  foreach ($points as $n => $p) {
+    $row['name'] = $n;
+    $row['points'] = $p;
+    $rows[] = $row;
+  }
+  return $rows;
+}
+
+
+/**
+ * Implements hook_theme().
+ */
+function mt_karma_theme($existing, $type, $theme, $path) {
+  return array(
+    'leaderboard' => array(
+      'variables' => array(
+        'rows' => NULL,
+        'empty' => t("No worker has worked on this HIT task. Please load assignments first."),
+      ),
+      'template' => 'leaderboard',
+    ),
+  );
+}
+
+
+function mt_karma_display($func) {
+  $content = '';
+  $node = menu_get_object();
+
+  if (isset($node) && $node->type == 'mt_task') {
+    $task_id = $node->nid;
+    $settings = parse_ini_string( $node->mt_properties_secure[LANGUAGE_NONE][0]['value'] );
+    $rows = $func($task_id, $settings);
+
+    if (count($rows) > 0) {
+      $content = theme('leaderboard', array(
+        'rows' => $rows,
+        'empty' => t("No worker has worked on this HIT task. Please load assignments first."),
+      ));
+    }
+  }
+
+  return $content;
+}

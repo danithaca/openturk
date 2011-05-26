@@ -1,0 +1,11 @@
+name = Async Command
+description = This module saves time-consuming commands in a database table, so that an external script/program can execute them asynchronously.
+package = Other
+core = 7.x
+; files[] = async_command.test
+; Information added by drupal.org packaging script on 2011-05-26
+version = "7.x-1.0-alpha2"
+core = "7.x"
+project = "async_command"
+datestamp = "1306375614"
+

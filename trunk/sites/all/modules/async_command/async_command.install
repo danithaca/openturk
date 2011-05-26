@@ -1,0 +1,83 @@
+<?php
+// $Id: $
+
+/**
+ * @file
+ *   External Command installation file.
+ */
+
+/**
+ * Implementation of hook_schema()
+ */
+function async_command_schema() {
+  $schema = array();
+  $schema['async_command'] = array(
+    'description' => 'This is the table to store external async commands.',
+    'fields' => array(
+      'id' => array(
+        'description' => 'Unique id',
+        'type' => 'serial',
+        'size' => 'normal',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'uid' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => "FK User's {users}.uid.",
+      ),
+      'eid' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => "Related entity_id for this command, if any. If no entity_id, set it to 0."
+      ),
+      'app' => array(
+        'description' => 'The application that generates/executes the command',
+        'type' => 'varchar',
+        'not null' => TRUE,
+        'length' => 20,
+      ),
+      'command' => array(
+        'description' => 'The command to be executed, with parameters',
+        'type' => 'text',
+        'not null' => TRUE,
+      ),
+      'status' => array(
+        'type' => 'int',
+        'size' => 'tiny',
+        'description' => 'The status code of the command: NULL-submitted, 1-successful, 0-unsuccessful',
+      ),
+      'message' => array(
+        'description' => 'The message for the execution.',
+        'type' => 'text',
+        'not null' => FALSE,
+      ),
+      'created' => array(
+        'description' => 'The Unix timestamp this command is created',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'changed' => array(
+        'description' => 'The Unix timestamp this command is last changed',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('id'),
+    'indexes' => array(
+      'async_command_app_index' => array('app'),
+      'async_command_created_index' => array('created'),
+    ),
+    'foreign keys' => array(
+      'user_uid' => array(
+        'table' => 'users',
+        'columns' => array('uid' => 'uid'),
+      ),
+    ),
+  );
+  return $schema;
+}
