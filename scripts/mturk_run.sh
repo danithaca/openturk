@@ -6,4 +6,4 @@ CONFIG_FILE=../sites/default/config.properties
 export CLASSPATH="${CLASSPATH}:$(find "$ASYNC_COMMAND_HOME/lib" -name "*.jar" | tr '\n' ':')"
 export CLASSPATH="${CLASSPATH}:$(find "$MTURK_SDK_HOME/lib" -name "*.jar" | tr '\n' ':')"
 
-$JYTHON_HOME/jython ../sites/all/modules/mt_task/script.py -t $CONFIG_FILE
+$JYTHON_HOME/jython ../sites/all/modules/mt_task/script.py -c $CONFIG_FILE
