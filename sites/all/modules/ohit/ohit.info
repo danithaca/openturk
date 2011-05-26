@@ -1,0 +1,7 @@
+; $Id: $
+name = Openturk HIT
+description = Module to handle operations related to HIT
+package = Openturk.org
+dependencies[] = filter
+core = 7.x
+; files[] = ohit.test

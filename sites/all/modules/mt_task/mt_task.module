@@ -1,0 +1,167 @@
+<?php
+
+/**
+ * @file
+ *   Amazon Mechanical Turk integration module file.
+ */
+
+
+/**
+ * Implements hook_help().
+ */
+function mt_task_help($path, $arg) {
+  switch ($path) {
+    case 'admin/help#mt_task':
+      $output = '<h3>' . t('About') . '</h3>';
+      $output .= '<p>' . t("This module enables <a href='@openturk'>Openturk.org</a> to process data from <a href='@amt'>Amazon Mechanical Turk</a>.", array('@openturk' => 'http://openturk.org', '@amt' => 'http://mturk.com')) . '</p>';
+      return $output;
+  }
+}
+
+/**
+ * Implementation of hook_menu
+ */
+function mt_task_menu() {
+  // 'title' and 'description' needs to be untranslated
+  $items_orig = array(
+    'mt_task/%/get_balance' => array(
+      'title' => 'Get Balance',
+      'page arguments' => array(1, 'get_balance()'),
+      'description' => 'Retrieve the balance of your AMT Requester account. Please see results in the command list table below. Use this operation to test this application.',
+    ),
+    'mt_task/%/load_all_hits' => array(
+      'title' => 'Load All HITs',
+      'page arguments' => array(1, 'load_all_hits()'),
+      'description' => 'Load all HITs ever submitted to AMT from my account.',
+    ),
+    'mt_task/%/load_hits' => array(
+      'title' => 'Load HITs',
+      'page arguments' => array(1, 'load_hits()'),
+      'description' => 'Load HITs into this site. Please specify hit_type_id in "MT Properties". Otherwise your latest HIT_TYPE would be loaded.',
+    ),
+    'mt_task/%/load_assignments' => array(
+      'title' => 'Load Assignments',
+      'page arguments' => array(1, 'load_assignments()'),
+      'description' => 'Load worker assignments for the HITs into the site. Please load HITs first. Run this command regularly to get updates from AMT.',
+    ),
+  );
+
+  $items = array();
+  foreach ($items_orig as $path => $item) {
+    $items[$path] = array(
+      'page callback' => 'mt_task_create_command',
+      'access callback' => 'mt_task_access',
+      'access arguments' => array(1),
+      'type' => MENU_CALLBACK,
+      //'context' => MENU_CONTEXT_INLINE,
+      //'file' => 'node.pages.inc',
+
+    ) + $item;
+  }
+
+  return $items;
+}
+
+
+/**
+ * Implements hook_node_info().
+ */
+function mt_task_node_info() {
+  return array(
+    'mt_task' => array(
+      'name' => t('Mechanical Turk Task'),
+      'base' => 'mt_task',
+      'description' => t('Each <em>MT Task</em> node represent a task on Amazon Mechanical Turk.'),
+    )
+  );
+}
+
+/**
+ * Implements hook_form().
+ */
+function mt_task_form($node, $form_state) {
+  return node_content_form($node, $form_state);
+}
+
+
+/**
+ * Implements hook_permission()
+ */
+function mt_task_permission() {
+  $perms = array(
+    'administer own mt_task' => array(
+      'title' => t('Administer your own Mechanical Turk tasks'),
+      'description' => t('You need to have this permission in order to create/admin mt_task nodes'),
+    ),
+  );
+  return $perms;
+}
+
+function mt_task_access($task_id) {
+  if(user_access('administer own mt_task') != TRUE) {
+    return FALSE;
+  }
+  global $user;
+  $node = node_load($task_id);
+  /*watchdog('mt_task', $user->uid);
+  watchdog('mt_task', $node->uid);
+  if (int($user->uid) == int($node->uid)) {
+    return TRUE;
+  }
+  else {
+    return FALSE;
+  }*/
+  return TRUE;
+}
+
+/**
+ * Implementation of hook_node_view
+ */
+function mt_task_node_view($node, $view_mode, $langcode) {
+  global $user;
+  # TODO: this seems redundant to node access permission. consider remove it.
+  if ($node->uid != $user->uid || !user_access('administer own mt_task')) {
+    // if no permission, then do nothing.
+    return;
+  }
+  
+  // only for 'full' view.
+  if ($node->type == 'mt_task' && $view_mode == 'full' 
+      && node_is_page($node) && empty($node->in_preview) ) {
+
+    // generate the "operations" section
+    $menu_orig = mt_task_menu();
+    $menu = array();
+    // replace wildcard in hook_menu to be the node_id.
+    foreach ($menu_orig as $path => $menu_entry) {
+      $menu[strtr($path, array('%' => $node->nid))] = $menu_entry;
+    }
+    $node->content['mt_task_operations'] = array(
+      '#markup' => theme('async_command_operations', array('menu' => $menu, 'title' => t('Amazon Mechanical Turk Operations'))),
+      '#weight' => 1,
+    );
+
+    // display recent commands with this task
+    $recent_command = async_command_retrieve_command_list('mt_task', NULL, $node->nid);
+    $node->content['mt_task_command_list'] = array(
+      '#markup' => theme('async_command_list', array('command_list' => $recent_command, 'cols' => array('uid','command','created','changed','status','message'))),
+      '#weight' => 2,
+    );
+  }
+}
+
+function mt_task_create_command($task_id, $command) {
+  async_command_create_command('mt_task', $command, array('eid'=>$task_id));
+  // note: @command will be check_plain() automatically.
+  drupal_set_message(t('We have put your request @command in the queue. It will be executed soon. Please refresh the page to see the update.', array('@command' => $command)));
+  drupal_goto("node/$task_id");
+}
+
+
+/**
+ * Implements hook_cron().
+ */
+function mt_task_cron() {
+  // by default, avoid duplicate
+  async_command_create_command('mt_task', 'update_worker()', array('uid' => 0));
+}

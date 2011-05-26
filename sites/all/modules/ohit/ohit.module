@@ -1,0 +1,78 @@
+<?php
+// $Id: $
+
+function ohit_menu() {
+  $items['ohit_test'] = array(
+    'title' => "OHIT form test",
+    'page callback' => "drupal_get_form",
+    'page arguments' => array("ohit_hitform"),
+    'type' => MENU_CALLBACK,
+    'access callback' => TRUE,
+  );
+  return $items;
+}
+
+function _ohit_filter_process($text) {
+  $output = $text;
+  $output .= drupal_render(drupal_get_form('ohit_hitform'));
+  //$output .= var_export(drupal_get_form('ohit_hitform'));
+  //$output .= drupal_render(ohit_hitform());
+  return $output;
+}
+
+function ohit_node_view($node,$view_mode, $langcode) {
+  $node->content = array_merge($node->content, drupal_get_form('ohit_hitform'));
+}
+
+function ohit_filter_info() {
+  $filters['ohit_filter'] = array(
+    "title" => t('OHIT Filter'),
+    "description" => t("OHIT nodes should use this filter by default"),
+    "process callback" => "_ohit_filter_process",
+    "cache" => FALSE,
+  );
+  return $filters;
+}
+
+
+function ohit_hitform($form, &$form_state) {
+  global $user;
+  $uid = $user->uid;
+  //$node = menu_get_object();
+  //$nid = $node->nid;
+
+  //$form['#tree'] = TRUE;
+  $form['question'] = array(
+    '#type' => 'markup',
+    '#value' => "Please label the story:",
+  );
+
+  $form['answer'] = array(
+    '#type' => 'radios',
+    '#title' => "Political Leaning",
+    '#options' => array('red'=>'red', 'blue'=>'blue', 'gray'=>'gray'),
+    '#description' => "red for conservative, blue for liberal, gray for not sure",
+  );
+
+  /*$form['nid'] = array(
+    '#type' => 'hidden',
+    '#value' => $nid,
+  );*/
+  $form['uid'] = array(
+    '#type' => 'hidden',
+    '#value' => $uid,
+  );
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Submit'),
+  );
+  return $form;
+}
+
+function ohit_hitform_submit($form, &$form_state) {
+  $uid = $form_state['values']['uid'];
+  $nid = 1; //$form_state['values']['nid'];
+  $answer = $form_state['values']['answer'];
+  drupal_set_message("Successfully laeled $answer for node $nid!");
+  $form_state['redirect'] = "node/$nid";
+}

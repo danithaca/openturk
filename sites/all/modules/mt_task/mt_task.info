@@ -1,0 +1,15 @@
+name = Amazon Mechanical Turk Integration
+description = This module reads HITs from AMT and display results and analysis.
+package = Openturk.org
+core = 7.x
+
+dependencies[] = async_command
+dependencies[] = encset
+
+files[] = mt_task.module
+; Information added by drupal.org packaging script on 2011-05-26
+version = "7.x-1.0-alpha2"
+core = "7.x"
+project = "mt_task"
+datestamp = "1306375618"
+

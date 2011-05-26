@@ -1,0 +1,21 @@
+# This configuration file should follow the java .properties format. http://en.wikipedia.org/wiki/.properties
+
+##### database configuration #####
+# For a list of the database configuration parameters, please see http://commons.apache.org/dbcp/configuration.html
+username=daniel
+password=1234567
+driverClassName=com.mysql.jdbc.Driver
+url=jdbc:mysql://localhost/drupal7
+
+
+##### Additional settings #####
+
+# database prefix in Drupal
+#prefix=
+
+# mcrypt secret key. please specify if you use Encrypted Settings Field
+#mcrypt_secret_key=
+
+# php cli executible.
+#php_cli=/usr/bin/php
+
