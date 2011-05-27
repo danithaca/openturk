@@ -10,12 +10,16 @@
  */
 function mt_karma_block_info() {
   return array(
-    'leaderboard productivity' => array(
-      'info' => t('AMT karma productivity leaderboard'),
+    'leaderboard '. MTKarmaProductivity::identifier() => array(
+      'info' => t('AMT karma leaderboard: !id', array('!id' => MTKarmaProductivity::identifier())),
       'cache' => DRUPAL_CACHE_PER_PAGE,
     ),
-    'leaderboard conformity' => array(
-      'info' => t('AMT karma conformity leaderboard'),
+    'leaderboard '. MTKarmaConformity::identifier() => array(
+      'info' => t('AMT karma leaderboard: !id', array('!id' => MTKarmaConformity::identifier())),
+      'cache' => DRUPAL_CACHE_PER_PAGE,
+    ),
+    'leaderboard '. MTKarmaResponsiveness::identifier() => array(
+      'info' => t('AMT karma leaderboard: !id', array('!id' => MTKarmaResponsiveness::identifier())),
       'cache' => DRUPAL_CACHE_PER_PAGE,
     ),
   );
@@ -26,180 +30,25 @@ function mt_karma_block_info() {
  */
 function mt_karma_block_view($delta = '') {
   $block = array();
-  switch ($delta) {
-    case 'leaderboard productivity':
-      $block['subject'] = t('Productivity leaderboard');
-      $block['content'] = mt_karma_display('mt_karma_top_productivity');
-      break;
-    case 'leaderboard conformity':
-      $block['subject'] = t('Conformity leaderboard');
-      $block['content'] = mt_karma_display('mt_karma_top_conformity');
-      break;
+  $node = menu_get_object();
+  if (isset($node) && $node->type == 'mt_task') {
+    switch ($delta) {
+      case 'leaderboard '. MTKarmaProductivity::identifier():
+        $leaderboard = new MTKarmaProductivity($node->nid);
+        break;
+      case 'leaderboard '. MTKarmaConformity::identifier():
+        $leaderboard = new MTKarmaConformity($node->nid);
+        break;
+      case 'leaderboard '. MTKarmaResponsiveness::identifier():
+        $leaderboard = new MTKarmaResponsiveness($node->nid);
+        break;
+    }
+    if (isset($leaderboard)) {
+      $block['subject'] = $leaderboard->getTitle();
+      $block['content'] = $leaderboard->generateContent();
+    }
   }
   return $block;
-}
-
-
-function mt_karma_top_productivity($task_id, $settings) {
-  $display = isset($settings['productivity_display']) ? $settings['productivity_display'] : 10;
-  $bonus = mt_karma_productivity_bonus($task_id, $settings);
-
-  $query = db_select('mt_assignment', 'a', array('fetch' => PDO::FETCH_ASSOC));
-  $query->innerJoin('mt_task_hit', 'h', 'a.hit_id=h.hit_id');
-  $query->innerJoin('mt_worker', 'w', 'w.worker_id=a.worker_id');  // in order to find display_name
-  $query->addField('a', 'worker_id');
-  $query->addField('w', 'display_name');
-  $query->addExpression('COUNT(a.assignment_id)', 'total_hits');
-  $query->where('a.assignment_status=:status AND h.task_id=:task_id', array(':status' => 'Approved', ':task_id' => $task_id));
-  $query->groupBy('a.worker_id', 'w.display_name');
-  $query->orderBy('total_hits', 'DESC');
-  $query->range(0, $display);
-  $result = $query->execute();
-  //$result = db_query("SELECT worker_id, count(a.id) as total_hits FROM {mt_task_assignment} a INNER JOIN {mt_task_hit} h
-  //    ON a.hit_id=h.hit_id WHERE a.assignment_status='app' AND h.task_id=:task_id GROUP BY worker_id ORDER BY count(a.id) DESC",
-  //    array(':task_id' => $task_id), array('fetch' => PDO::FETCH_ASSOC));
-
-  // preparing rows
-  $rows = array();
-  foreach ($result as $position => $record) {
-    $row['name'] = $record['display_name'];
-    $row['points'] = $record['total_hits'];
-    $row['bonus'] = isset($bonus[$position]) ?  $bonus[$position] : 0.00;
-    $rows[] = $row;
-  }
-  return $rows;
-}
-
-
-function mt_karma_productivity_bonus($task_id, $settings) {
-  if (isset($settings['productivity_bonus_fixed'])) {
-    // no need to convert string=>float, because PHP will convert automatically.
-    $bonus = @explode('/', $settings['productivity_bonus_fixed']);
-  }
-  else if (isset($settings['productivity_bonus_per_assignment'])) {
-    // TODO: this is not implemented
-  }
-  else {
-    $bonus = array();
-  }
-  return $bonus;
-}
-
-
-function mt_karma_conformity_bonus($task_id, $settings) {
-  if (isset($settings['conformity_bonus_fixed'])) {
-    // no need to convert string=>float, because PHP will convert automatically.
-    $bonus = @explode('/', $settings['conformity_bonus_fixed']);
-  }
-  else {
-    $bonus = array();
-  }
-  return $bonus;
-}
-
-
-function mt_karma_top_conformity($task_id, $settings) {
-  $display = isset($settings['conformity_display']) ? $settings['conformity_display'] : 10;
-  $neutral_answers = isset($settings['conformity_neutral_answers']) ? explode(',', $settings['conformity_neutral_answers']) : array();
-  $ratio_mode = isset($settings['conformity_ratio']) ? (boolean) $settings['conformity_ratio'] : FALSE;
-  $limit_to_productivity = isset($settings['conformity_limit_to_productivity']) ? (boolean) $settings['conformity_limit_to_productivity'] : FALSE;
-  $bonus = mt_karma_conformity_bonus($task_id, $settings);
-
-  $points = array();
-  $max_points = array();
-
-  $hits = db_query('SELECT hit_id FROM {mt_task_hit} WHERE task_id=:task_id', array(':task_id' => $task_id), array('fetch' => PDO::FETCH_ASSOC));
-  foreach ($hits as $hit) {
-    $hit_id = $hit['hit_id'];
-    $query = db_select('mt_assignment', 'a', array('fetch' => PDO::FETCH_ASSOC));
-    $query->innerJoin('mt_worker', 'w', 'w.worker_id=a.worker_id');
-    $query->addField('w', 'display_name');
-    $query->addField('a', 'answer');
-    $query->where('a.assignment_status=:status AND a.hit_id=:hit_id', array(':status' => 'Approved', ':hit_id' => $hit_id));
-    $results = $query->execute();
-
-    $group = array();
-    foreach($results as $record) {
-      $name = $record['display_name'];
-      $answer_xml = $record['answer'];
-
-      // TODO: test question identifier [#1167330]
-      $answer_dom = simplexml_load_string($answer_xml);
-      //$question = $answer_dom->Answer->QuestionIdentifier;
-      $answer = (string) $answer_dom->Answer[0]->SelectionIdentifier;
-
-      $group[$name] = $answer;
-    }
-
-    // if we have less than 3 answers for the HIT, then there's no conformity.
-    if (count($group) < 3) {
-      continue;
-    }
-
-    // count the number of each type of answer in the group of assignments for a single HIT
-    $answer_group = array_count_values($group);
-    foreach ($group as $name => $answer) {
-      if (!isset($points[$name])) {
-        $points[$name] = 0;
-      }
-      if (!isset($max_points[$name])) {
-        $max_points[$name] = 0;
-      }
-
-      $max_points[$name] += 2 ;
-
-      // if this answer does not agree to any other answers.
-      if ($answer_group[$answer] == 1) {
-        $points[$name] -= 2;
-      }
-      // if some people agree with you, but you give a neutral answer, then no score.
-      else if ($answer_group[$answer] > 1 && in_array($answer, $neutral_answers)) {
-        $points[$name] += 0;
-      }
-      // if some people agree with you (but not majority), and the answer is not neutral, then +1
-      else if ($answer_group[$answer] > 1 && $answer_group[$answer] <= count($group)/2) {
-        $points[$name] += 1;
-      }
-      // if majority people agree with you , and the answer is not neutral, then +2
-      else if ($answer_group[$answer] > 1 && $answer_group[$answer] > count($group)/2) {
-        $points[$name] += 2;
-      }
-      else {
-        assert(FALSE);
-      }
-    }
-
-  } // end of loop all HIT
-
-  // normalize the points based on max points
-  if ($ratio_mode) {
-    foreach ($points as $n => $p) {
-      $points[$n] = round($p/$max_points[$n], 2);
-    }
-  }
-
-  // limit results to only those on top of the productivity leaderboard.
-  if ($limit_to_productivity) {
-    //$settings['productivity_display'] = $display;
-    $productivity_rows = mt_karma_top_productivity($task_id, $settings);
-    $p_points = array();
-    foreach ($productivity_rows as $p) {
-      $p_points[$p['name']] = $p['points'];
-    }
-    $points = array_intersect_key($points, $p_points);
-  }
-
-  arsort($points);
-  $points = array_slice($points, 0, $display);
-  $rows = array();
-  foreach ($points as $n => $p) {
-    $row['name'] = $n;
-    $row['points'] = $p;
-    $position = count($rows);
-    $row['bonus'] = isset($bonus[$position]) ?  $bonus[$position] : 0.00;
-    $rows[] = $row;
-  }
-  return $rows;
 }
 
 
@@ -219,28 +68,390 @@ function mt_karma_theme($existing, $type, $theme, $path) {
 }
 
 
-function mt_karma_display($func) {
-  $content = '';
-  $node = menu_get_object();
 
-  if (isset($node) && $node->type == 'mt_task') {
-    $task_id = $node->nid;
-    $settings_str = $node->mt_properties_secure;
-    if (empty($settings_str)) {
-      $settings = array();
-    }
-    else {
-      $settings = parse_ini_string( $settings_str[LANGUAGE_NONE][0]['value'] );
-    }
-    $rows = $func($task_id, $settings);
 
-    if (count($rows) > 0) {
-      $content = theme('leaderboard', array(
-        'rows' => $rows,
-        'empty' => t("No worker has worked on this HIT task. Please load assignments first."),
-      ));
+abstract class MTKarmaLeaderboard {
+  protected $task_id;
+  protected $settings;
+  protected $topN;
+  protected $minimum;
+  protected $disable;
+  protected $begin_timestamp;
+  protected $end_timestamp;
+
+
+  function __construct($task_id) {
+    $this->task_id = $task_id;
+    $task = node_load($task_id);
+    $settings_str = $task->mt_properties_secure;
+    $this->settings = encset_parse_ini($settings_str);
+    $this->processCommonSettings();
+  }
+
+
+  protected function processCommonSettings() {
+    // add the type convertion to prevent security issues from malicious user input.
+    // this is the number of users to show in the leaderboard
+    $this->topN = (int) $this->settings->get('leaderboard_top_n', 10);
+    // this controls whether to disable the block
+    $this->disable = (boolean) $this->settings->get($this->identifier() .'_disable', FALSE);
+    // this controls the minimum number of HITs a worker has to finish before qualified to be shown in the leaderboard
+    $this->minimum = (int) $this->settings->get('leaderboard_minimum_requirement', 0);
+    $period = explode('/', $this->settings->get('leaderboard_valid_period', ''));
+    if (count($period) == 2) {
+      if (($begin = strtotime($period[0]))) $this->begin_timestamp = $begin;
+      if (($end = strtotime($period[1]))) $this->end_timestamp = $end;
     }
   }
 
-  return $content;
+
+  /**
+   * This is the identifier of the class
+   */
+  abstract public static function identifier();
+
+
+  /**
+   * This is the function to compute ranks in the leaderboard.
+   */
+  abstract protected function computeRanks();
+
+
+
+  /**
+   * Default bonus computation only takes fixed bonus.
+   */
+  protected function computeBonus() {
+    $key = $this->identifier() .'_bonus_fixed';
+    $bonus_str = $this->settings->get($key, '');
+    return empty($bonus_str) ? array() : explode(',', $bonus_str);
+  }
+
+
+
+
+  public function generateRows() {
+    $ranks = $this->computeRanks();
+    $bonus = $this->computeBonus();
+
+    // preparing rows
+    $rows = array();
+    foreach ($ranks as $position => $record) {
+      $row['name'] = $record['name'];
+      $row['points'] = $record['points'];
+      $row['bonus'] = isset($bonus[$position]) ?  $bonus[$position] : 0.00;
+      $rows[] = $row;
+    }
+    return $rows;
+  }
+
+
+  public function generateContent() {
+    $content = '';
+    if ($this->disable) {
+      return '';
+    }
+
+    $rows = $this->generateRows();
+    $content = theme('leaderboard', array(
+      'rows' => $rows,
+      'empty' => t("No worker has worked on this HIT task. Please load assignments first."),
+    ));
+
+    return $content;
+  }
+
+
+  public function getTitle() {
+    $custom_title = $this->settings->get($this->identifier() .'_custom_title', NULL);
+    if (empty($custom_title)) {
+      return t('Leaderboard %id', array('%id' => $this->identifier()));
+    }
+    else {
+      return $custom_title;
+    }
+  }
+
+  protected function retrieveProductivityPoints($minimum=NULL, $limit=NULL, $begin=NULL, $end=NULL, $sort=FALSE) {
+    $query = db_select('mt_assignment', 'a', array('fetch' => PDO::FETCH_ASSOC));
+    $query->innerJoin('mt_task_hit', 'h', 'a.hit_id=h.hit_id');
+    $query->innerJoin('mt_worker', 'w', 'w.worker_id=a.worker_id');  // in order to find display_name
+    $query->addField('w', 'display_name', 'name');
+    $query->addExpression('COUNT(a.assignment_id)', 'points');
+    $query->groupBy('name');
+    //$query->where('a.assignment_status=:status AND h.task_id=:task_id', array(':status' => 'Approved', ':task_id' => $this->task_id));
+    $query->condition('a.assignment_status', 'Approved', '=');
+    $query->condition('h.task_id', $this->task_id, '=');
+    if ($begin > 0) {
+      $query->condition('a.submit_time', $begin, '>=');
+    }
+    if ($end > 0) {
+      $query->condition('a.submit_time', $end, '<=');
+    };
+    if ($minimum > 0) {
+      $query->havingCondition('points', $minimum, '>');
+    }
+    if ($limit > 0) {
+      $query->range(0, $limit);
+    }
+    if ($sort) {
+      $query->orderBy('points', 'DESC');
+    }
+
+    return $query->execute();
+  }
+
+}
+
+
+class MTKarmaProductivity extends MTKarmaLeaderboard {
+
+  public static function identifier() {
+    return 'productivity';
+  }
+
+  protected function computeRanks() {
+    return $this->retrieveProductivityPoints($this->minimum, $this->topN,
+                                             $this->begin_timestamp, $this->end_timestamp, TRUE);
+  }
+
+  /*protected function computeBonus() {
+    if (isset($settings['productivity_bonus_fixed'])) {
+      // no need to convert string=>float, because PHP will convert automatically.
+      $bonus = @explode(',', $settings['productivity_bonus_fixed']);
+    }
+    else if (isset($settings['productivity_bonus_per_assignment'])) {
+      // TODO: this is not implemented
+    }
+    else {
+      $bonus = array();
+    }
+    return $bonus;
+  }*/
+
+}
+
+
+class MTKarmaConformity extends MTKarmaLeaderboard {
+
+  public static function identifier() {
+    return 'conformity';
+  }
+
+  protected $neutral_answers = array();
+  protected $points = array();
+  protected $max_points = array();
+
+
+  protected function processGroup($group) {
+    // count the number of each type of answer in the group of assignments for a single HIT
+    $answer_group = array_count_values($group);
+    foreach ($group as $name => $answer) {
+      if (!isset($this->points[$name])) {
+        $this->points[$name] = 0;
+      }
+      if (!isset($this->max_points[$name])) {
+        $this->max_points[$name] = 0;
+      }
+
+      $this->max_points[$name] += 2 ;
+
+      // if this answer does not agree to any other answers.
+      if ($answer_group[$answer] == 1) {
+        $this->points[$name] -= 2;
+      }
+      // if some people agree with you, but you give a neutral answer, then no score.
+      else if ($answer_group[$answer] > 1 && in_array($answer, $this->neutral_answers)) {
+        $this->points[$name] += 0;
+      }
+      // if some people agree with you (but not majority), and the answer is not neutral, then +1
+      else if ($answer_group[$answer] > 1 && $answer_group[$answer] <= count($group)/2) {
+        $this->points[$name] += 1;
+      }
+      // if majority people agree with you , and the answer is not neutral, then +2
+      else if ($answer_group[$answer] > 1 && $answer_group[$answer] > count($group)/2) {
+        $this->points[$name] += 2;
+      }
+      else {
+        assert(FALSE);
+      }
+    }
+  }
+
+  protected function processHIT($hit_id) {
+    // conformity has to be based on all assignments. cannot do just a simple time period.
+    $query = db_select('mt_assignment', 'a', array('fetch' => PDO::FETCH_ASSOC));
+    $query->innerJoin('mt_worker', 'w', 'w.worker_id=a.worker_id');
+    $query->addField('w', 'display_name', 'name');
+    $query->addField('a', 'answer');
+    $query->where('a.assignment_status=:status AND a.hit_id=:hit_id', array(':status' => 'Approved', ':hit_id' => $hit_id));
+    $assignments = $query->execute();
+
+    // process answer and compose group
+    $group = array();
+    foreach($assignments as $record) {
+      $name = $record['name'];
+      $answer_xml = $record['answer'];
+
+      // TODO: test question identifier [#1167330]
+      $answer_dom = simplexml_load_string($answer_xml);
+      //$question = $answer_dom->Answer->QuestionIdentifier;
+      $answer = (string) $answer_dom->Answer[0]->SelectionIdentifier;
+
+      $group[$name] = $answer;
+    }
+
+    // if we have less than 3 answers for the HIT, then there's no conformity.
+    if (count($group) < 3) {
+      return;
+    }
+    else {
+      $this->processGroup($group);
+    }
+  }
+
+
+
+  protected function handleRatioMode() {
+    // normalize the points based on max points
+    $ratio_mode = (boolean) $this->settings->get('conformity_ratio', FALSE);
+    if ($ratio_mode) {
+      foreach ($this->points as $n => $p) {
+        $this->points[$n] = round($p/$this->max_points[$n], 2);
+      }
+    }
+  }
+
+
+
+  protected function handleLimitToProductivity() {
+    // limit results to only those on top of the productivity leaderboard.
+    $limit_to_productivity = $this->settings->get('conformity_limit_to_productivity', FALSE);
+    if ($limit_to_productivity) {
+      //$settings['productivity_display'] = $display;
+      $prod = new MTKarmaProductivity($this->task_id);
+      $productivity_rows = $prod->generateRows();
+      $p_points = array();
+      foreach ($productivity_rows as $p) {
+        $p_points[$p['name']] = $p['points'];
+      }
+      $this->points = array_intersect_key($this->points, $p_points);
+    }
+  }
+
+
+
+  protected function handleMinimumRequirementAndPeriod() {
+    // filter out users who don't meet the minimum hits requirement
+    if ($this->minimum > 0 || $this->begin_timestamp > 0 || $this->end_timestamp > 0) {
+      $productivity_rows = $this->retrieveProductivityPoints($this->minimum, NULL, $this->begin_timestamp, $this->end_timestamp, FALSE);
+      $p_points = array();
+      foreach ($productivity_rows as $p) {
+        $p_points[$p['name']] = $p['points'];
+      }
+      $this->points = array_intersect_key($this->points, $p_points);
+    }
+  }
+
+
+
+  protected function handleTopN() {
+    arsort($this->points);
+    $this->points = array_slice($this->points, 0, $this->topN);
+  }
+
+
+
+  protected function computeRanks() {
+    $hits = db_query("SELECT hit_id FROM {mt_task_hit} WHERE task_id=:task_id",
+                     array(':task_id' => $this->task_id), array('fetch' => PDO::FETCH_ASSOC));
+
+    $neutral_answers = $this->settings->get('conformity_neutral_answers', '');
+    if (!empty($neutral_answers)) {
+      $this->neutral_answers = explode(',', $neutral_answers);
+    }
+    // going through all hits.
+    foreach ($hits as $hit) {
+      $this->processHIT($hit['hit_id']);
+    }
+
+    // note: the order has to be like this.
+    $this->handleMinimumRequirementAndPeriod();
+    $this->handleLimitToProductivity();
+    $this->handleRatioMode();
+    $this->handleTopN();
+
+    $ranks = array();
+    foreach ($this->points as $n => $p) {
+      $rank['name'] = $n;
+      $rank['points'] = $p;
+      $ranks[] = $rank;
+    }
+    return $ranks;
+  }
+
+}
+
+
+
+class MTKarmaResponsiveness extends MTKarmaLeaderboard {
+
+  public static function identifier() {
+    return 'responsiveness';
+  }
+
+  public function computeRanks() {
+    $query = db_select('mt_assignment', 'a', array('fetch' => PDO::FETCH_ASSOC));
+    $query->innerJoin('mt_task_hit', 't', 'a.hit_id=t.hit_id');
+    $query->innerJoin('mt_worker', 'w', 'w.worker_id=a.worker_id');  // in order to find display_name
+    $query->innerJoin('mt_hit', 'h', 'h.hit_id=a.hit_id');
+
+    $query->addField('w', 'display_name', 'name');
+    $query->addExpression('(a.submit_time - h.hit_creation)', 'seconds');
+
+    $query->condition('a.assignment_status', 'Approved', '=');
+    $query->condition('t.task_id', $this->task_id, '=');
+
+    if ($this->begin_timestamp > 0) {
+      $query->condition('a.submit_time', $this->begin_timestamp, '>=');
+    }
+    if ($this->end_timestamp > 0) {
+      $query->condition('a.submit_time', $this->end_timestamp, '<=');
+    }
+
+    $query->orderBy('name');
+    $query->orderBy('seconds', 'ASC');
+
+    $results = $query->execute();
+    $data = array(); // key is 'name', value is an array of seconds.
+
+    foreach ($results as $record) {
+      $name = $record['name'];
+      $seconds = $record['seconds'];
+      if (!isset($data[$name])) {
+        $data[$name] = array();
+      }
+      $data[$name][] = $seconds;
+    }
+
+    $median = array();
+    foreach ($data as $name => $seconds_list) {
+      $length = count($seconds_list);
+      if ($length > $this->minimum)  {
+        $median[$name] = $seconds_list[ floor(($length-1)/2) ];
+      }
+    }
+
+    asort($median);
+    $median = array_slice($median, 0, $this->topN);
+    $rows = array();
+    foreach ($median as $n => $s) {
+      $row['name'] = $n;
+      $m = round($s/60);
+      $row['points'] = round($m/60) .'h'. $m%60 .'m';
+      $rows[] = $row;
+    }
+    return $rows;
+  }
+
 }

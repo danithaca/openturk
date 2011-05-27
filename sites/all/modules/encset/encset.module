@@ -339,6 +339,9 @@ function encset_decrypt($text) {
  * Read INI settings
  */
 function encset_ini_get($field, $key, $default) {
+  if (empty($field)) {
+    return $default;
+  }
   $field_value = $field[LANGUAGE_NONE][0]['value'];
   $ini = parse_ini_string($field_value);
   if (isset($ini[$key])) {
@@ -346,5 +349,38 @@ function encset_ini_get($field, $key, $default) {
   }
   else {
     return $default;
+  }
+}
+
+
+function encset_parse_ini($field) {
+  return new EncsetINI($field);
+}
+
+
+
+class EncsetINI {
+  // the default ini settings array
+  private $ini = array();
+
+  function __construct($field) {
+    if (!empty($field)) {
+      $field_value = $field[LANGUAGE_NONE][0]['value'];
+      $this->ini = parse_ini_string($field_value);
+    }
+  }
+
+  public function get($key, $default, $func = NULL) {
+    if (isset($this->ini[$key])) {
+      if ($func != NULL) {
+        return $func($this->ini[$key]);
+      }
+      else {
+        return $this->ini[$key];
+      }
+    }
+    else {
+      return $default;
+    }
   }
 }
