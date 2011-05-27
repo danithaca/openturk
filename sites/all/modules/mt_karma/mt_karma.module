@@ -28,11 +28,11 @@ function mt_karma_block_view($delta = '') {
   $block = array();
   switch ($delta) {
     case 'leaderboard productivity':
-      $block['subject'] = t('Productivity Leaderboard');
+      $block['subject'] = t('Productivity leaderboard');
       $block['content'] = mt_karma_display('mt_karma_top_productivity');
       break;
     case 'leaderboard conformity':
-      $block['subject'] = t('Conformity Leaderboard');
+      $block['subject'] = t('Conformity leaderboard');
       $block['content'] = mt_karma_display('mt_karma_top_conformity');
       break;
   }
@@ -41,7 +41,8 @@ function mt_karma_block_view($delta = '') {
 
 
 function mt_karma_top_productivity($task_id, $settings) {
-  $display = isset($settings['mt_karma_productivity_display']) ? $settings['mt_karma_productivity_display'] : 10;
+  $display = isset($settings['productivity_display']) ? $settings['productivity_display'] : 10;
+  $bonus = mt_karma_productivity_bonus($task_id, $settings);
 
   $query = db_select('mt_assignment', 'a', array('fetch' => PDO::FETCH_ASSOC));
   $query->innerJoin('mt_task_hit', 'h', 'a.hit_id=h.hit_id');
@@ -60,20 +61,49 @@ function mt_karma_top_productivity($task_id, $settings) {
 
   // preparing rows
   $rows = array();
-  foreach ($result as $record) {
+  foreach ($result as $position => $record) {
     $row['name'] = $record['display_name'];
     $row['points'] = $record['total_hits'];
+    $row['bonus'] = isset($bonus[$position]) ?  $bonus[$position] : 0.00;
     $rows[] = $row;
   }
   return $rows;
 }
 
 
+function mt_karma_productivity_bonus($task_id, $settings) {
+  if (isset($settings['productivity_bonus_fixed'])) {
+    // no need to convert string=>float, because PHP will convert automatically.
+    $bonus = @explode('/', $settings['productivity_bonus_fixed']);
+  }
+  else if (isset($settings['productivity_bonus_per_assignment'])) {
+    // TODO: this is not implemented
+  }
+  else {
+    $bonus = array();
+  }
+  return $bonus;
+}
+
+
+function mt_karma_conformity_bonus($task_id, $settings) {
+  if (isset($settings['conformity_bonus_fixed'])) {
+    // no need to convert string=>float, because PHP will convert automatically.
+    $bonus = @explode('/', $settings['conformity_bonus_fixed']);
+  }
+  else {
+    $bonus = array();
+  }
+  return $bonus;
+}
+
+
 function mt_karma_top_conformity($task_id, $settings) {
-  $display = isset($settings['mt_karma_conformity_display']) ? $settings['mt_karma_conformity_display'] : 10;
-  $neutral_answers = isset($settings['mt_karma_conformity_neutral_answers']) ? explode(',', $settings['mt_karma_conformity_neutral_answers']) : array();
-  $ratio_mode = isset($settings['mt_karma_conformity_ratio']) ? (boolean) $settings['mt_karma_conformity_ratio'] : FALSE;
-  $limit_to_productivity = isset($settings['mt_karma_conformity_limit_to_productivity']) ? (boolean) $settings['mt_karma_conformity_limit_to_productivity'] : FALSE;
+  $display = isset($settings['conformity_display']) ? $settings['conformity_display'] : 10;
+  $neutral_answers = isset($settings['conformity_neutral_answers']) ? explode(',', $settings['conformity_neutral_answers']) : array();
+  $ratio_mode = isset($settings['conformity_ratio']) ? (boolean) $settings['conformity_ratio'] : FALSE;
+  $limit_to_productivity = isset($settings['conformity_limit_to_productivity']) ? (boolean) $settings['conformity_limit_to_productivity'] : FALSE;
+  $bonus = mt_karma_conformity_bonus($task_id, $settings);
 
   $points = array();
   $max_points = array();
@@ -93,7 +123,7 @@ function mt_karma_top_conformity($task_id, $settings) {
       $name = $record['display_name'];
       $answer_xml = $record['answer'];
 
-      // TODO: test question identifier
+      // TODO: test question identifier [#1167330]
       $answer_dom = simplexml_load_string($answer_xml);
       //$question = $answer_dom->Answer->QuestionIdentifier;
       $answer = (string) $answer_dom->Answer[0]->SelectionIdentifier;
@@ -150,6 +180,7 @@ function mt_karma_top_conformity($task_id, $settings) {
 
   // limit results to only those on top of the productivity leaderboard.
   if ($limit_to_productivity) {
+    //$settings['productivity_display'] = $display;
     $productivity_rows = mt_karma_top_productivity($task_id, $settings);
     $p_points = array();
     foreach ($productivity_rows as $p) {
@@ -164,6 +195,8 @@ function mt_karma_top_conformity($task_id, $settings) {
   foreach ($points as $n => $p) {
     $row['name'] = $n;
     $row['points'] = $p;
+    $position = count($rows);
+    $row['bonus'] = isset($bonus[$position]) ?  $bonus[$position] : 0.00;
     $rows[] = $row;
   }
   return $rows;
@@ -192,7 +225,13 @@ function mt_karma_display($func) {
 
   if (isset($node) && $node->type == 'mt_task') {
     $task_id = $node->nid;
-    $settings = parse_ini_string( $node->mt_properties_secure[LANGUAGE_NONE][0]['value'] );
+    $settings_str = $node->mt_properties_secure;
+    if (empty($settings_str)) {
+      $settings = array();
+    }
+    else {
+      $settings = parse_ini_string( $settings_str[LANGUAGE_NONE][0]['value'] );
+    }
     $rows = $func($task_id, $settings);
 
     if (count($rows) > 0) {
