@@ -1,0 +1,40 @@
+<?php
+
+/**
+ * @file
+ *   AMT Analysis install file.
+ */
+
+function mt_analysis_schema() {
+  $schema = array();
+  
+  $schema['mt_analysis'] = array(
+    'description' => 'This is the table to store analysis results.',
+    'fields' => array(
+      'task_id' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'description' => "The node_id of the node that represents an AMT task for the results.",
+      ),
+      'results_json' => array(
+        'description' => 'The results of the analysis on the task. in JSON.',
+        'type' => 'text',
+        'not null' => FALSE,
+      ),
+      'updated' => array(
+        'description' => 'The Unix timestamp this task is updated.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('task_id'),
+    'foreign keys' => array(
+      'mt_task' => array(
+        'table' => 'node',
+        'columns' => array('task_id' => 'nid'),
+      ),
+    ),
+  );
+  return $schema;
+}

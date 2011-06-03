@@ -1,0 +1,105 @@
+<?php
+
+/**
+ * @file
+ *   AMT Analysis module file
+ */
+
+/**
+ * Implements hook_mt_operations().
+ * This hook is for mt_task related modules.
+ */
+function mt_analysis_mt_operations() {
+  return array(
+    'mt_analysis/%/compute_all()' => array(
+      'title' => 'Compute results',
+      'description' => 'Compute statistics and results for this AMT task.',
+    ),
+  );
+}
+
+/**
+ * Implements hook_menu().
+ */
+function mt_analysis_menu() {
+  return array(
+    'node/%/mt_analysis' => array(
+      'title' => 'Results',
+      'description' => 'Stats and results of this AMT task.',
+      'page callback' => 'mt_analysis_display_results',
+      'page arguments' => array(1),
+      'access callback' => 'mt_task_access',
+      'access arguments' => array(1),
+      'type' => MENU_LOCAL_TASK,
+    ),
+  );
+}
+
+
+function mt_analysis_display_results($task_id, $op = NULL) {
+  $results = NULL;
+  $results_json = NULL;
+  $row = db_query('SELECT results_json, updated FROM {mt_analysis} WHERE task_id=:task_id', array(':task_id' => $task_id))->fetchAssoc();
+  if ($row) {
+    $results_json = $row['results_json'];
+    $results = drupal_json_decode($results_json, TRUE);
+    $results['updated'] = $row['updated'];
+    global $base_root;
+    $results['json_url'] = $base_root . request_uri() . '/json';
+    $results['csv_majority'] = $base_root . request_uri() . '/csv_majority';
+  }
+
+  if ($op == NULL) {
+    $variables = array();
+    $variables['results'] = $results;
+    $variables['results_json'] = $results_json;
+    return theme('mt_analysis_results', $variables);
+  }
+
+  else if ($op == 'json') {
+    drupal_add_http_header('Content-Type', 'application/json');
+    if ($row) {
+      echo $row['results_json'];
+    }
+    else {
+      echo drupal_json_encode(array('message' => t('No results.')));
+    }
+  }
+
+  else if ($op == 'csv_majority') {
+    drupal_add_http_header('Content-Type', 'plain/text');
+    if ($row) {
+      $results_majority = $results['results_majority'];
+      $lines = array();
+      $header = array('hit_id', 'annotation_id', 'combined_answers', 'majority_answer');
+      $lines[] = implode(',', $header);
+      foreach ($results_majority as $line) {
+        $fields = array();
+        foreach ($line as $field) {
+          $fields[] = '"'. str_replace('"', '""', $field) .'"';
+        }
+        $lines[] = implode(',', $fields);
+      }
+      echo implode("\n", $lines);
+    }
+    else {
+      echo t('No results.');
+    }
+  }
+}
+
+
+/**
+ * Implements hook_theme().
+ */
+function mt_analysis_theme($existing, $type, $theme, $path) {
+  return array(
+    'mt_analysis_results' => array(
+      'variables' => array(
+        'results' => NULL,
+        'results_json' => NULL
+      ),
+      'template' => 'mt_analysis_results',
+    ),
+  );
+}
