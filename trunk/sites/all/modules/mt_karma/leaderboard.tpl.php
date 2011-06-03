@@ -4,7 +4,7 @@
  * Default theme implementation for leaderboard
  */
 ?>
-<div id="leaderboard" class="<?php print $classes; ?>"<?php print $attributes; ?>>
+<div class="<?php print $classes; ?>"<?php print $attributes; ?>>
   <?php if (count($rows) == 0): ?>
     <p><?php print $empty; ?></p>
   <?php else: ?>

@@ -387,6 +387,10 @@ abstract public class AbstractDrupalApp {
         return properties;
     }
 
+    protected Properties readEncryptedSettingsField(String value) {
+        return readEncryptedSettingsField(value, EncryptionMethod.MCRYPT);
+    }
+
 
     /**
      * Be very careful of using single quote in pattern. Needs to use two single quotes for PHP string.
@@ -475,5 +479,25 @@ abstract public class AbstractDrupalApp {
             throw new DrupalRuntimeException(e);
         }
     }
+
+    /**
+     * @see http://code.google.com/p/json-simple/wiki/EncodingExamples
+     * @see http://code.google.com/p/json-simple/
+     * @param obj The object to be encoded
+     */
+    /*protected String encodeJSON(Object obj) {
+        return JSONValue.toJSONString(obj);
+    }*/
+
+
+    /**
+     * @see http://code.google.com/p/json-simple/wiki/DecodingExamples
+     * @see http://code.google.com/p/json-simple/
+     * @param jsonText json text to be decoded.
+     * @return the JSON object, caller should change it to Map of List or other primitives.
+     */
+    /*protected Object decodeJSON(String jsonText) {
+        return JSONValue.parse(jsonText);
+    }*/
 
 }
