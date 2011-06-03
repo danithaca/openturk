@@ -7,9 +7,9 @@ dependencies[] = async_command
 dependencies[] = encset
 
 files[] = mt_task.module
-; Information added by drupal.org packaging script on 2011-05-26
-version = "7.x-1.0-alpha2"
+; Information added by drupal.org packaging script on 2011-06-03
+version = "7.x-1.0-alpha3"
 core = "7.x"
 project = "mt_task"
-datestamp = "1306375618"
+datestamp = "1307102221"
 

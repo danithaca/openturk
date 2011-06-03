@@ -10,6 +10,7 @@ from java.text import SimpleDateFormat
 
 from org.drupal.project.async_command import JythonDrupalApp
 from org.drupal.project.async_command import Result
+from org.json.simple import JSONValue
 
 from com.amazonaws.mturk.util import ClientConfig
 from com.amazonaws.mturk.service.axis import RequesterService
@@ -158,25 +159,43 @@ class MTTaskApp(JythonDrupalApp):
     return Result(True, msg+' -- Total # of HITs loaded: '+str(total))
 
 
+  def _parse_answer_xml(self, assignment_id, answer_xml):
+    ''' Return json string '''
+    json = {}
+    answers = self.service.parseAnswers(answer_xml)
+    for answer in answers.getAnswer():
+      answer_str = self.service.getAnswerValue(assignment_id, answer, True)
+      # according to the implementation of RequesterService.getAnswerValue(), '\t' is the delimeter for question and answer strings.
+      delim_pos = answer_str.find('\t')
+      q, a = answer_str[:delim_pos], answer_str[delim_pos+1:]
+      json[q] = a
+    return JSONValue.toJSONString(json)
+
 
 
   def _save_assignment_to_db(self, assignment):
     assignment_status = assignment.getAssignmentStatus()
     if assignment_status != None:
       assignment_status = assignment_status.getValue()
+
+    assignment_id = assignment.getAssignmentId()
+    answer_xml = assignment.getAnswer()
+    answer_json = self._parse_answer_xml(assignment_id, answer_xml)
+
     if self.queryValue("SELECT assignment_id FROM {mt_assignment} WHERE assignment_id=?", assignment.getAssignmentId()) == None:
       # insert new assignment
       self.update("INSERT {mt_assignment} (assignment_id, hit_id, worker_id, assignment_status, accept_time, submit_time, \
-                  approval_time, rejection_time, answer, requester_feedback, updated) VALUE (?,?,?,?,?,?,?,?,?,?,?)",
-                  assignment.getAssignmentId(), assignment.getHITId(), assignment.getWorkerId(), assignment_status, ct(assignment.getAcceptTime()),
+                  approval_time, rejection_time, answer, answer_json, requester_feedback, updated) VALUE (?,?,?,?,?,?,?,?,?,?,?,?)",
+                  assignment_id, assignment.getHITId(), assignment.getWorkerId(), assignment_status, ct(assignment.getAcceptTime()),
                   ct(assignment.getSubmitTime()), ct(assignment.getApprovalTime()), ct(assignment.getRejectionTime()),
-                  assignment.getAnswer(), assignment.getRequesterFeedback(), self.timestamp)
+                  answer_xml, answer_json, assignment.getRequesterFeedback(), self.timestamp)
     else:
       # update existing assignment
       self.update("UPDATE {mt_assignment} SET assignment_status=?, accept_time=?, submit_time=?, approval_time=?, rejection_time=?,\
-                  answer=?, requester_feedback=?, updated=? WHERE assignment_id=?", assignment_status, ct(assignment.getAcceptTime()),
+                  answer=?, answer_json=?, requester_feedback=?, updated=? WHERE assignment_id=?",
+                  assignment_status, ct(assignment.getAcceptTime()),
                   ct(assignment.getSubmitTime()), ct(assignment.getApprovalTime()), ct(assignment.getRejectionTime()),
-                  assignment.getAnswer(), assignment.getRequesterFeedback(), self.timestamp, assignment.getAssignmentId())
+                  answer_xml, answer_json, assignment.getRequesterFeedback(), self.timestamp, assignment_id)
 
 
 

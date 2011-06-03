@@ -1,7 +1,8 @@
 # config parameters
 
 # the directory of the async_command module
-ASYNC_COMMAND_HOME=/home/to/drupal/sites/all/modules/async_command
+DRUPAL_HOME=/home/to/drupal
+ASYNC_COMMAND_HOME=$DRUPAL_HOME/sites/all/modules/async_command
 MTURK_SDK_HOME=/home/to/java-aws-mturk-1.2.2
 JYTHON_HOME=/home/to/jython2.5.2
 

@@ -63,7 +63,11 @@ function async_command_retrieve_command_list($app=NULL, $uid=NULL, $eid=NULL, $l
   $query->fields('async_command', array_keys(_async_command_table_fields()));
 
   if ($app != NULL) {
-    $query->condition('app', $app);
+    if (is_array($app)) {
+      $query->condition('app', $app, 'IN');
+    } else {
+      $query->condition('app', $app, '=');
+    }
   }
   if ($uid != NULL) {
     $query->condition('uid', $uid);
@@ -89,7 +93,7 @@ function async_command_theme($existing, $type, $theme, $path) {
     'async_command_operations' => array(
       'variables' => array(
         'title' => t('Operations'),
-        'menu' => NULL,
+        'operations' => NULL,
       ),
     ),
   );
@@ -141,13 +145,14 @@ function theme_async_command_list($variables) {
 
 
 function theme_async_command_operations($variables) {
-  $menu = $variables['menu'];
+  $operations = $variables['operations'];
   $items = array();
-  foreach ($menu as $path => $menu_entry) {
+  foreach ($operations as $path => $operation) {
     // note: in hook_menu, 'title' is untranslated, so we need to translate here.
-    $item = l(t($menu_entry['title']), $path);
-    if (isset($menu_entry['description'])) {
-      $item .= " (". t($menu_entry['description']) .")";
+    // TODO: need to make it look better (description should have smaller font)
+    $item = l(t($operation['title']), $path);
+    if (isset($operation['description'])) {
+      $item .= " (". t($operation['description']) .")";
     }
     $items[] = $item;
   }
@@ -179,6 +184,10 @@ function async_command_trigger_info() {
  * This trigger would be triggered in CRON for now.
  */
 function async_command_fire_trigger($trigger_name, $command) {
+  // trigger is optional
+  if (!module_exists('trigger')) {
+    return;
+  }
   // Ask the trigger module for all actions enqueued for the 'triggersomething' trigger.
   $aids = trigger_get_assigned_actions($trigger_name);
   $context = array(

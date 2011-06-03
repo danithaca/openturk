@@ -39,7 +39,7 @@ function mt_task_install() {
       'entity_type' => 'node',
       'bundle' => 'mt_task',
       'description' => t('This field stores properties for the MT task, such as access_id, etc. The content of this field is encrypted, and only viewable when editting.'),
-      'default_value' => array(array('value' => "access_key=\nsecret_key=")),
+      //'default_value' => array(array('value' => "access_key=\nsecret_key=")),
       'widget' => array(
         'type' => 'encset_textarea',
       ),
@@ -324,7 +324,12 @@ function mt_task_schema() {
         'not null' => FALSE,
       ),
       'answer' => array(
-        'description' => 'The answer from the work for this HIT',
+        'description' => 'The original answer from the work for this HIT',
+        'type' => 'text',
+        'not null' => FALSE,
+      ),
+      'answer_json' => array(
+        'description' => 'The answer from the work for this HIT, parsed into JSON for convenience',
         'type' => 'text',
         'not null' => FALSE,
       ),
@@ -419,4 +424,19 @@ function mt_task_schema() {
   );
 
   return $schema;
+}
+
+
+/**
+ * Implements hook_update_N().
+ * Add answer_json to the {mt_assignment} table.
+ */
+function mt_task_update_7001() {
+  //db_drop_primary_key('mt_assignment');
+  //db_change_field('mt_assignment');
+  db_add_field('mt_assignment', 'answer_json', array(
+    'description' => 'The answer from the work for this HIT, parsed into JSON for convenience',
+    'type' => 'text',
+    'not null' => FALSE,
+  ));
 }

@@ -283,22 +283,31 @@ class MTKarmaConformity extends MTKarmaLeaderboard {
     $query = db_select('mt_assignment', 'a', array('fetch' => PDO::FETCH_ASSOC));
     $query->innerJoin('mt_worker', 'w', 'w.worker_id=a.worker_id');
     $query->addField('w', 'display_name', 'name');
-    $query->addField('a', 'answer');
+    $query->addField('a', 'answer_json');
     $query->where('a.assignment_status=:status AND a.hit_id=:hit_id', array(':status' => 'Approved', ':hit_id' => $hit_id));
     $assignments = $query->execute();
 
     // process answer and compose group
     $group = array();
+    $main_question = $this->settings->get('main_question', NULL);
     foreach($assignments as $record) {
       $name = $record['name'];
-      $answer_xml = $record['answer'];
 
-      // TODO: test question identifier [#1167330]
-      $answer_dom = simplexml_load_string($answer_xml);
-      //$question = $answer_dom->Answer->QuestionIdentifier;
-      $answer = (string) $answer_dom->Answer[0]->SelectionIdentifier;
+      // stop using xml. use json instead.
+      //$answer_xml = $record['answer'];
+      //$answer_dom = simplexml_load_string($answer_xml);
+      //$question = $answer_dom->Answer[0]->QuestionIdentifier;
+      //$answer = (string) $answer_dom->Answer[0]->SelectionIdentifier;
 
-      $group[$name] = $answer;
+      $answer_json = json_decode($record['answer_json'], TRUE);
+      if (!empty($main_question) && isset($answer_json[$main_question])) {
+        $group[$name] = $answer_json[$main_question];
+      }
+      else if (empty($main_question) && count($answer_json) > 0) {
+        // take the answer of the first question.
+        $values = array_values($answer_json);
+        $group[$name] = $values[0];
+      }
     }
 
     // if we have less than 3 answers for the HIT, then there's no conformity.
