@@ -219,7 +219,7 @@ class MTTaskApp(JythonDrupalApp):
       ON u.uid=f.entity_id WHERE entity_type="user" AND bundle="user"')
     for row in rows:
       mt_settings = self.readEncryptedSettingsField(row['mt_properties_secure_value'], self.EncryptionMethod.MCRYPT)
-      worker_id = mt_settings['worker_id']
+      worker_id = mt_settings['worker_id'].strip()
       if worker_id != None:
         # TODO: see #1148280 (http://drupal.org/node/1148280)
         if worker_id in mapping:
