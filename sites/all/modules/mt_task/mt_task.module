@@ -109,29 +109,22 @@ function mt_task_form($node, $form_state) {
  */
 function mt_task_permission() {
   $perms = array(
-    'administer own mt_task' => array(
-      'title' => t('Administer your own Mechanical Turk tasks'),
-      'description' => t('You need to have this permission in order to create/admin mt_task nodes'),
+    'administer mt_task' => array(
+      'title' => t('Administer Mechanical Turk tasks'),
+      'description' => t('You need to have this permission in order to administer any mt_task nodes'),
     ),
   );
   return $perms;
 }
 
 function mt_task_access($task_id) {
-  if(user_access('administer own mt_task') != TRUE) {
+  if(user_access('administer mt_task') != TRUE) {
     return FALSE;
   }
-  
   $node = node_load($task_id);
-  if ($node->type != 'mt_task') {
+  if (!node_access('create', $node) && !node_access('edit', $node)) {
     return FALSE;
   }
-  
-  global $user;
-  if ($user->uid != $node->uid) {
-    return FALSE;
-  }
-  
   return TRUE;
 }
 
@@ -141,7 +134,7 @@ function mt_task_access($task_id) {
 /*function mt_task_node_view($node, $view_mode, $langcode) {
   global $user;
   # TODO: this seems redundant to node access permission. consider remove it.
-  if ($node->uid != $user->uid || !user_access('administer own mt_task')) {
+  if ($node->uid != $user->uid || !user_access('administer mt_task')) {
     // if no permission, then do nothing.
     return;
   }
@@ -213,4 +206,21 @@ function mt_task_create_command($app, $task_id, $command) {
 function mt_task_cron() {
   // by default, avoid duplicate
   async_command_create_command('mt_task', 'update_worker()', array('uid' => 0));
+}
+
+
+/**
+ * Implements hook_user_view
+ */
+function mt_task_user_view($account, $view_mode, $langcode) {
+  $worker_id = encset_ini_get($account->mt_properties_secure, 'worker_id', NULL);
+  if ($view_mode == 'full' && $worker_id != NULL) {
+    $account->content['summary']['mt_worker_id'] = array(
+      '#type' => 'user_profile_item',
+      '#title' => t('AMT Worker ID'),
+      //'#description' => t('The worker ID from AMT. Only workers need to input this in the MT Properties box.'),
+      '#markup' => $worker_id,
+      //'#weight' => -1,
+    );
+  }
 }
