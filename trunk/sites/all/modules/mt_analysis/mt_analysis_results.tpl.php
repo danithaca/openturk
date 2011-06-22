@@ -30,7 +30,7 @@
     <p><em>Note</em>: If CSV file has encoding errors, please use the JSON output data['results_majority'] instead.</p>
 
     <h2>JSON results</h2>
-    <p>For JSON results, please visit <a href="<?php echo $results['json_url']; ?>">this URL</a>.</p>
+    <p>For JSON results, please visit <a href="<?php echo $results['json_url']; ?>">this URL</a>. Please keep this URL secure against unauthorized access.</p>
 
     <p><em>Last updated: <?php echo format_date($results['updated']); ?></em></p>
 

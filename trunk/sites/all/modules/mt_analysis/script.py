@@ -10,7 +10,8 @@ from org.json.simple import JSONValue, JSONObject
 from collections import defaultdict
 from pprint import pprint
 from fleiss import computeKappa
-import xml.dom.minidom, sys, time
+import xml.dom.minidom, sys, time, random, string
+
 
 class MTAnalysisApp(JythonDrupalApp):
   
@@ -50,9 +51,10 @@ class MTAnalysisApp(JythonDrupalApp):
 
   def _save_results(self):
     results_json = JSONValue.toJSONString(self.results)
+    access_key = ''.join(random.choice(string.ascii_uppercase + string.digits) for x in range(10))
     if self.queryValue("SELECT task_id FROM {mt_analysis} WHERE task_id=?", self.task_id) == None:
-      self.update("INSERT INTO {mt_analysis}(task_id, results_json, updated) VALUE(?,?,?)",
-        self.task_id, results_json, self.timestamp)
+      self.update("INSERT INTO {mt_analysis}(task_id, results_json, access_key, updated) VALUE(?,?,?,?)",
+        self.task_id, results_json, access_key, self.timestamp)
     else:
       self.update("UPDATE {mt_analysis} SET results_json=?, updated=? WHERE task_id=?",
         results_json, self.timestamp, self.task_id)
