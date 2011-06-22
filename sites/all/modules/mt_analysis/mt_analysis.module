@@ -11,9 +11,11 @@
  */
 function mt_analysis_mt_operations() {
   return array(
-    'mt_analysis/%/compute_all()' => array(
-      'title' => 'Compute results',
-      'description' => 'Compute statistics and results for this AMT task.',
+    'mt_analysis' => array(
+      'compute_all()' => array(
+        'title' => 'Compute results',
+        'description' => 'Compute statistics and results for this AMT task based on the assignments loaded.',
+      ),
     ),
   );
 }
@@ -24,13 +26,14 @@ function mt_analysis_mt_operations() {
 function mt_analysis_menu() {
   return array(
     'node/%/mt_analysis' => array(
-      'title' => 'Results',
+      'title' => 'AMT Results',
       'description' => 'Stats and results of this AMT task.',
       'page callback' => 'mt_analysis_display_results',
       'page arguments' => array(1),
       'access callback' => 'mt_task_access',
       'access arguments' => array(1),
       'type' => MENU_LOCAL_TASK,
+      'weight' => 11,
     ),
     'node/%/mt_analysis/majority.csv' => array(
       'description' => 'Download results in CSV format, using the majority voting algorithm.',

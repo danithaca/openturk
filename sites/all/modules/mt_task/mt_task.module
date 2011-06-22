@@ -25,61 +25,98 @@ function mt_task_help($path, $arg) {
  */
 function mt_task_mt_operations() {
   return array(
-    'mt_task/%/get_balance()' => array(
-      'title' => 'Get Balance',
-      'description' => 'Retrieve the balance of your AMT Requester account. Please see results in the command list table below. Use this operation to test this application.',
-    ),
-    'mt_task/%/load_all_hits()' => array(
-      'title' => 'Load All HITs',
-      'description' => 'Load all HITs ever submitted to AMT from my account.',
-    ),
-    'mt_task/%/load_hits()' => array(
-      'title' => 'Load HITs',
-      'description' => 'Load HITs into this site. Please specify hit_type_id in "MT Properties". Otherwise your latest HIT_TYPE would be loaded.',
-    ),
-    'mt_task/%/load_assignments()' => array(
-      'title' => 'Load Assignments',
-      'description' => 'Load worker assignments for the HITs into the site. Please load HITs first. Run this command regularly to get updates from AMT.',
+    'mt_task' => array(
+      'get_balance()' => array(
+        'title' => t('Get Balance'),
+        'description' => t('Retrieve the balance of your AMT Requester account. Please see results in the command list table below. Use this operation to test this application.'),
+      ),
+      'load_all_hits()' => array(
+        'title' => t('Load All HITs'),
+        'description' => t('Load all HITs ever submitted to AMT from my account.'),
+      ),
+      'load_hits()' => array(
+        'title' => t('Load HITs'),
+        'description' => t('Load HITs into this site. Please specify hit_type_id in "MT Properties". Otherwise your latest HIT_TYPE would be loaded.'),
+      ),
+      'load_assignments()' => array(
+        'title' => t('Load Assignments'),
+        'description' => t('Load worker assignments for the HITs into the site. Please load HITs first. Run this command regularly to get updates from AMT.'),
+      ),
     ),
   );
 }
 
+
 /**
- * Implementation of hook_menu
+ * Implements hook_menu();
  */
 function mt_task_menu() {
-  // 'title' and 'description' needs to be untranslated
-  $operations = module_invoke_all('mt_operations');
-  foreach ($operations as $path => &$operation) {
-    if (!isset($operation['page callback'])) {
-      $operation['page callback'] = 'mt_task_create_command';
-    }
-    if (!isset($operation['page arguments'])) {
-      $operation['page arguments'] = array(0, 1, 2);
-    }
-    if (!isset($operation['access callback'])) {
-      $operation['access callback'] = 'mt_task_access';
-    }
-    if (!isset($operation['access arguments'])) {
-      $operation['access arguments'] = array(1);
-    }  
-    if (!isset($operation['type'])) {
-      $operation['type'] = MENU_CALLBACK;
-    }  
-  }
-  
   $items = array(
     'node/%/mt_operations' => array(
-      'title' => 'Operations',
+      'title' => 'AMT Operations',
       'description' => 'Operations you can do with this AMT task',
-      'page callback' => 'mt_task_display_operations',
-      'page arguments' => array(1),
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('mt_task_view_operations'),
       'access callback' => 'mt_task_access',
       'access arguments' => array(1),
       'type' => MENU_LOCAL_TASK,
+      'weight' => 10,
     ),
   );
-  return $items + $operations;
+  return $items;
+}
+
+function mt_task_view_operations() {
+  $task_id = arg(1);
+  $operations = module_invoke_all('mt_operations');
+  $options = array();
+  $descriptions = array();
+  foreach ($operations as $app_name => $app_ops) {
+    foreach ($app_ops as $comm => $def) {
+      $op = "{$app_name}:{$comm}";
+      $options[$op] = $def['title'];
+      $descriptions[$op] = array('#description' => $def['description']);
+    }
+  }
+  
+  $form['operations'] = array(
+    '#type' => 'radios',
+    '#title' => t('AMT Operations'),
+    '#title_display' => 'invisible',
+    '#description' => t('Please choose which operation you want to execute.'),
+    '#options' => $options,
+  );
+  $form['operations'] = $form['operations'] + $descriptions;
+  
+  $form['task_id'] = array(
+    '#type' => 'hidden',
+    '#value' => $task_id, 
+  );
+    
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Run'),
+  );
+    
+  $app_names = array_keys($operations);
+  $recent_command = async_command_retrieve_command_list($app_names, NULL, $task_id);
+  $form['operations_history'] = array(
+      '#markup' => theme('async_command_list', array('command_list' => $recent_command, 'cols' => array('uid','command','created','changed','status','message'))),
+  );
+  
+  return $form;
+}
+
+function mt_task_view_operations_submit($form, &$form_state) {
+  $op_array = explode(':', $form_state['values']['operations']);
+  $app = $op_array[0];
+  $command = $op_array[1];
+  $task_id = $form_state['values']['task_id'];
+  
+  async_command_create_command($app, $command, array('eid'=>$task_id));
+  // note: @command will be check_plain() automatically.
+  drupal_set_message(t('We have put your request @command in the queue. It will be executed soon. Please refresh the page to see the update.', array('@command' => $command)));
+  drupal_goto("node/$task_id/mt_operations");
 }
 
 
@@ -122,6 +159,9 @@ function mt_task_access($task_id) {
     return FALSE;
   }
   $node = node_load($task_id);
+  if ($node->type != 'mt_task') {
+    return FALSE;
+  }
   if (!node_access('create', $node) && !node_access('edit', $node)) {
     return FALSE;
   }
@@ -167,37 +207,6 @@ function mt_task_access($task_id) {
     );
   }
 }*/
-
-
-function mt_task_display_operations($task_id) {
-  $node = node_load($task_id);
-  // generate the "operations" section
-  $operations_orig = module_invoke_all('mt_operations');
-  $operations = array();
-  $app_id_set = array();
-  // replace wildcard in hook_menu to be the node_id.
-  foreach ($operations_orig as $path => $operation) {
-    $operations[strtr($path, array('%' => $node->nid))] = $operation;
-    if ($app_id = strstr($path, '/', TRUE)) {
-      $app_id_set[] = $app_id;
-    }
-  }  
-  
-  $content = theme('async_command_operations', array('operations' => $operations, 'title' => t('Amazon Mechanical Turk Operations')));
-  // display recent commands with this task
-  $recent_command = async_command_retrieve_command_list(array_unique($app_id_set), NULL, $node->nid);
-  $content .= theme('async_command_list', array('command_list' => $recent_command, 'cols' => array('uid','command','created','changed','status','message')));
-  return $content;
-}
-
-
-
-function mt_task_create_command($app, $task_id, $command) {
-  async_command_create_command($app, $command, array('eid'=>$task_id));
-  // note: @command will be check_plain() automatically.
-  drupal_set_message(t('We have put your request @command in the queue. It will be executed soon. Please refresh the page to see the update.', array('@command' => $command)));
-  drupal_goto("node/$task_id/mt_operations");
-}
 
 
 /**
