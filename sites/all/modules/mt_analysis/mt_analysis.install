@@ -1,0 +1,61 @@
+<?php
+
+/**
+ * @file
+ *   AMT Analysis install file.
+ */
+
+function mt_analysis_schema() {
+  $schema = array();
+  
+  $schema['mt_analysis'] = array(
+    'description' => 'This is the table to store analysis results.',
+    'fields' => array(
+      'task_id' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'description' => 'The node_id of the node that represents an AMT task for the results.',
+      ),
+      'access_key' => array(
+        'type' => 'char',
+        'length' => 10,
+        'not null' => TRUE,
+        'description' => 'The access key to download JSON/CSV results in a program.',
+      ),
+      'results_json' => array(
+        'description' => 'The results of the analysis on the task. in JSON.',
+        'type' => 'text',
+        'not null' => FALSE,
+      ),
+      'updated' => array(
+        'description' => 'The Unix timestamp this task is updated.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('task_id'),
+    'foreign keys' => array(
+      'mt_task' => array(
+        'table' => 'node',
+        'columns' => array('task_id' => 'nid'),
+      ),
+    ),
+  );
+  return $schema;
+}
+
+/**
+ * Implements hook_update_N().
+ * Add access_key to the {mt_analysis} table.
+ */
+function mt_analysis_update_7002() {
+  db_query('DELETE FROM {mt_analysis}'); // has to remove existing analysis results in order to add the NOT NULL field.
+  db_add_field('mt_analysis', 'access_key', array(
+    'type' => 'char',
+    'length' => 10,
+    'not null' => TRUE,
+    'description' => 'The access key to download JSON/CSV results in a program.',
+    //'initial' => '0123456789',
+  ));
+}

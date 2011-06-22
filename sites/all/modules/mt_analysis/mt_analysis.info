@@ -1,0 +1,17 @@
+name = AMT Analysis
+description = This module computes stats for Amazon Mechanical Turk tasks.
+package = Openturk.org
+core = 7.x
+
+dependencies[] = mt_task
+
+files[] = mt_analysis.module
+files[] = mt_analysis_results.tpl.php
+
+
+; Information added by drupal.org packaging script on 2011-06-22
+version = "7.x-1.0-alpha3"
+core = "7.x"
+project = "mt_analysis"
+datestamp = "1308780419"
+
