@@ -32,62 +32,93 @@ function mt_analysis_menu() {
       'access arguments' => array(1),
       'type' => MENU_LOCAL_TASK,
     ),
+    'node/%/mt_analysis/majority.csv' => array(
+      'description' => 'Download results in CSV format, using the majority voting algorithm.',
+      'page callback' => 'mt_analysis_csv_majority',
+      'page arguments' => array(1),
+      'access callback' => 'mt_task_access',
+      'access arguments' => array(1),
+      'type' => MENU_CALLBACK,
+    ),
+    'node/%/mt_analysis/json/%' => array(
+      'description' => 'Download all results in JSON format.',
+      'page callback' => 'mt_analysis_json',
+      'page arguments' => array(1),
+      'access callback' => 'mt_analysis_program_access',
+      'access arguments' => array(1, 4),
+      'type' => MENU_CALLBACK,
+    ),
   );
 }
 
 
-function mt_analysis_display_results($task_id, $op = NULL) {
+function mt_analysis_get_results($task_id) {
   $results = NULL;
-  $results_json = NULL;
-  $row = db_query('SELECT results_json, updated FROM {mt_analysis} WHERE task_id=:task_id', array(':task_id' => $task_id))->fetchAssoc();
+  $row = db_query('SELECT results_json, access_key, updated FROM {mt_analysis} WHERE task_id=:task_id', array(':task_id' => $task_id))->fetchAssoc();
   if ($row) {
-    $results_json = $row['results_json'];
-    $results = drupal_json_decode($results_json, TRUE);
+    $results = drupal_json_decode($row['results_json'], TRUE);
+    $results['json'] = $row['results_json'];
     $results['updated'] = $row['updated'];
+    $results['access_key'] = $row['access_key'];
     global $base_root;
-    $results['json_url'] = $base_root . request_uri() . '/json';
-    $results['csv_majority'] = $base_root . request_uri() . '/csv_majority';
+    $results['json_url'] = $base_root . request_uri() . '/json/' . $row['access_key'];
+    $results['csv_majority'] = $base_root . request_uri() . '/majority.csv';
   }
+  return $results;
+}
 
-  if ($op == NULL) {
-    $variables = array();
-    $variables['results'] = $results;
-    $variables['results_json'] = $results_json;
-    return theme('mt_analysis_results', $variables);
+
+function mt_analysis_display_results($task_id) {
+  $results = mt_analysis_get_results($task_id);
+  $variables = array();
+  $variables['results'] = $results;
+  return theme('mt_analysis_results', $variables);
+}
+
+
+function mt_analysis_json($task_id) {
+  $results = mt_analysis_get_results($task_id);
+  drupal_add_http_header('Content-Type', 'application/json');
+  if ($results) {
+    echo $results['json'];
   }
-
-  else if ($op == 'json') {
-    drupal_add_http_header('Content-Type', 'application/json');
-    if ($row) {
-      echo $row['results_json'];
-    }
-    else {
-      echo drupal_json_encode(array('message' => t('No results.')));
-    }
-  }
-
-  else if ($op == 'csv_majority') {
-    drupal_add_http_header('Content-Type', 'plain/text');
-    if ($row) {
-      $results_majority = $results['results_majority'];
-      $lines = array();
-      $header = array('hit_id', 'annotation_id', 'combined_answers', 'majority_answer');
-      $lines[] = implode(',', $header);
-      foreach ($results_majority as $line) {
-        $fields = array();
-        foreach ($line as $field) {
-          $fields[] = '"'. str_replace('"', '""', $field) .'"';
-        }
-        $lines[] = implode(',', $fields);
-      }
-      echo implode("\n", $lines);
-    }
-    else {
-      echo t('No results.');
-    }
+  else {
+    echo drupal_json_encode(array('message' => t('No results.')));
   }
 }
 
+function mt_analysis_csv_majority($task_id) {
+  $results = mt_analysis_get_results($task_id);
+  drupal_add_http_header('Content-Type', 'plain/text');
+  if ($results) {
+    $results_majority = $results['results_majority'];
+    $lines = array();
+    $header = array('hit_id', 'annotation_id', 'combined_answers', 'majority_answer');
+    $lines[] = implode(',', $header);
+    foreach ($results_majority as $line) {
+      $fields = array();
+      foreach ($line as $field) {
+        $fields[] = '"'. str_replace('"', '""', $field) .'"';
+      }
+      $lines[] = implode(',', $fields);
+    }
+    echo implode("\n", $lines);
+  }
+  else {
+    echo t('No results.');
+  }
+}
+
+function mt_analysis_program_access($task_id, $access_key) {
+  if (strlen($access_key) != 10) {
+    return FALSE;
+  }
+  $results = mt_analysis_get_results($task_id);
+  if ($results != NULL && isset($results['access_key']) && $results['access_key'] == $access_key) {
+    return TRUE;
+  }
+  return FALSE; // default return false.
+}
 
 /**
  * Implements hook_theme().
@@ -97,7 +128,6 @@ function mt_analysis_theme($existing, $type, $theme, $path) {
     'mt_analysis_results' => array(
       'variables' => array(
         'results' => NULL,
-        'results_json' => NULL
       ),
       'template' => 'mt_analysis_results',
     ),
