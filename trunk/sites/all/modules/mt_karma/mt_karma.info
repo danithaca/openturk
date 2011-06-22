@@ -1,0 +1,16 @@
+name = AMT Karma
+description = This module display karma scores for Amazon Mechanical Turk workers.
+package = Openturk.org
+core = 7.x
+
+dependencies[] = mt_task
+dependencies[] = encset
+
+files[] = mt_karma.module
+files[] = leaderboard.tpl.php
+; Information added by drupal.org packaging script on 2011-06-03
+version = "7.x-1.0-alpha4"
+core = "7.x"
+project = "mt_karma"
+datestamp = "1307102544"
+
