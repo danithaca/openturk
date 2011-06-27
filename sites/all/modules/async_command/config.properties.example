@@ -19,3 +19,5 @@ url=jdbc:mysql://localhost/drupal7
 # php cli executible.
 #php_cli=/usr/bin/php
 
+# max database batch UPDATE/INSERT/DELETE size. used in JDBC batchExecute()
+#db_max_batch_size=5000

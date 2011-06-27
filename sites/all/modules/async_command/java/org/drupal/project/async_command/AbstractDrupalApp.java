@@ -16,10 +16,7 @@ import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.SQLException;
 import java.text.MessageFormat;
-import java.util.Date;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
+import java.util.*;
 import java.util.logging.Logger;
 
 /**
@@ -31,10 +28,12 @@ abstract public class AbstractDrupalApp {
     protected DataSource dataSource;
     protected Logger logger = Logger.getLogger(this.getClass().getName());
 
-    protected Properties config = new Properties();
-    protected String configFilePath = getDefaultConfigFilePath();
     protected RunningMode runningMode = RunningMode.ONCE;
-    protected String dbPrefix;
+    protected Properties config = new Properties();
+
+    String configFilePath = getDefaultConfigFilePath();
+    String dbPrefix;
+    int maxBatchSize;
 
     /**
      * @return The name of the drupal application.
@@ -79,16 +78,19 @@ abstract public class AbstractDrupalApp {
             int id = ((Long)(commandRecord.get("id"))).intValue();
             String command = (String)(commandRecord.get("command"));
 
-            // prepare the command
-            prepareCommand((Integer)commandRecord.get("uid"), (Integer)commandRecord.get("eid"), (Integer)commandRecord.get("created"));
-
-            // execute the command
             logger.info("Running async_command: " + command);
             Result result = null;
             try {
+                // prepare the command
+                prepareCommand((Integer)commandRecord.get("uid"), (Integer)commandRecord.get("eid"), (Integer)commandRecord.get("created"));
+                // execute the command
                 result = runCommand(command);
             } catch (EvaluationFailureException e) {
                 updateRecord(id, false, "Command evaluation error. See script log for details. Error: " + e.getMessage());
+                e.printStackTrace();
+                continue;
+            } catch (DrupalRuntimeException e) {
+                updateRecord(id, false, e.getMessage());
                 e.printStackTrace();
                 continue;
             }
@@ -131,7 +133,7 @@ abstract public class AbstractDrupalApp {
     }
 
 
-    protected void updateRecord(int id, boolean status, String message) {
+    void updateRecord(int id, boolean status, String message) {
         long changed = new Date().getTime() / 1000;
         try {
             update("UPDATE {async_command} SET status=?, message=?, changed=? WHERE id=?", status, message, changed, id);
@@ -144,7 +146,7 @@ abstract public class AbstractDrupalApp {
     /**
      * establish database connection to Drupal database. set dataSource property abd other parameters.
      */
-    protected void initDrupalConnection() {
+    void initDrupalConnection() {
         assert dataSource == null;  // assert that it hasn't been initialized yet.
         try {
             File configFile = new File(configFilePath);
@@ -162,6 +164,11 @@ abstract public class AbstractDrupalApp {
                 if (p.length() != 0) {
                     dbPrefix = p;
                 }
+            }
+
+            maxBatchSize = config.containsKey("db_max_batch_size") ? Integer.parseInt(config.getProperty("db_max_batch_size")) : 0;
+            if (maxBatchSize > 0) {
+                logger.info("Batch SQL size: " + maxBatchSize);
             }
 
             // create data source.
@@ -196,7 +203,7 @@ abstract public class AbstractDrupalApp {
         }
     }
 
-    protected String getDefaultConfigFilePath() {
+    private String getDefaultConfigFilePath() {
         String workingDir = System.getProperty("user.dir");
         return workingDir + File.separator + "config.properties";
     }
@@ -258,6 +265,42 @@ abstract public class AbstractDrupalApp {
         return num;
     }
 
+
+    protected int[] batch(String sql, Object[][] params) throws SQLException {
+        Connection connection = dataSource.getConnection();
+        connection.setAutoCommit(false);
+        int[] num = batch(connection, sql, params);
+        connection.commit();
+        connection.close();
+        return num;
+    }
+
+    protected int[] batch(Connection connection, String sql, Object[][] params) throws SQLException {
+        QueryRunner q = new QueryRunner(dataSource);
+        String processedSql = d(sql);
+        // fix slow problem [#1185100]
+        if (maxBatchSize > 0) {
+            int start = 0;
+            int end = 0;
+            int count;
+            int[] num = new int[params.length];
+            do {
+                end += maxBatchSize;
+                if (end > params.length) {
+                    end = params.length;
+                }
+                int[] batchNum =  q.batch(connection, processedSql, Arrays.copyOfRange(params, start, end));
+                for (count=0; count<batchNum.length; count++) {
+                    num[start+count] = batchNum[count];
+                }
+                start = end;
+            } while (end < params.length);
+            return num;
+        } else {
+            return q.batch(connection, processedSql, params);
+        }
+    }
+
     /**
      * this function handles CLI; users of the class should call this function.
      * @param args arguments from main()
@@ -282,7 +325,7 @@ abstract public class AbstractDrupalApp {
     }
 
 
-    protected void handleCommandExecutables(CommandLine command) {
+    private void handleCommandExecutables(CommandLine command) {
         // mutual exclusive options.
         if (command.hasOption('h')) {
             // print help message and exit.
@@ -313,7 +356,7 @@ abstract public class AbstractDrupalApp {
     }
 
 
-    protected void handleCommandSettings(CommandLine command) {
+    private void handleCommandSettings(CommandLine command) {
         if (command.hasOption('c')) {
             configFilePath = command.getOptionValue('c');
             logger.info("Set configuration file as: " + configFilePath);
@@ -337,7 +380,10 @@ abstract public class AbstractDrupalApp {
     }
 
 
-    protected Options buildOptions() {
+    /**
+     * If subclass needs to set properties, Use config.properties instead of override the method here.
+     */
+    private Options buildOptions() {
         Options options = new Options();
         options.addOption("c", true, "database configuration file");
         options.addOption("r", true, "program running mode: 'once' (default), 'continuous', or 'listening'");
@@ -433,6 +479,11 @@ abstract public class AbstractDrupalApp {
             logger.severe("PHP code interrupted.");
             throw new DrupalRuntimeException(e);
         }
+    }
+
+    protected Map<String, Object> unserializePhpArray(String serialized) {
+        SerializedPhpParser serializedPhpParser = new SerializedPhpParser(serialized);
+ 		return (Map<String, Object>) serializedPhpParser.parse();
     }
 
     /**
