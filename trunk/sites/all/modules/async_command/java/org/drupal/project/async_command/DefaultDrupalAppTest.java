@@ -5,9 +5,7 @@ import org.junit.Test;
 
 import java.util.Properties;
 
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 
 public class DefaultDrupalAppTest {
@@ -85,6 +83,40 @@ public class DefaultDrupalAppTest {
 
         Object result = app.queryValue("SELECT uid FROM {users} WHERE uid=-1");
         assertNull(result);
+    }
+
+    @Test
+    public void testBatchUpdate() throws Exception {
+        app.maxBatchSize = 2;
+        String s1 = app.evalPhp("echo serialize(2);");
+        Object[][] params1 = {{"async_command_test1", "1".getBytes()}, {"async_command_test2", s1.getBytes()}, {"async_command_test3", "3".getBytes()}};
+        app.batch("INSERT INTO {variable}(name, value) VALUES(?, ?)", params1);
+
+        long num1 = (Long) app.queryValue("SELECT COUNT(*) FROM {variable} WHERE name LIKE 'async_command_test%'");
+        assertEquals(num1, 3);
+
+        int v1 = (Integer) app.drupalVariableGet("async_command_test2");
+        assertEquals(v1, 2);
+
+        String s2 = app.evalPhp("echo serialize('abc');");
+        Object[][] params2 = {{s2.getBytes(), "async_command_test1"}};
+        app.batch("UPDATE {variable} SET value=? WHERE name=?", params2);
+        String v2 = (String) app.drupalVariableGet("async_command_test1");
+        assertEquals(v2, "abc");
+
+        app.maxBatchSize = 0;
+        Object[][] params3 = {{"async_command_test1"}, {"async_command_test2"}, {"async_command_test3"}};
+        app.batch("DELETE FROM {variable} WHERE name=?", params3);
+        long num2 = (Long) app.queryValue("SELECT COUNT(*) FROM {variable} WHERE name LIKE 'async_command_test%'");
+        assertEquals(num2, 0);
+    }
+
+    @Test
+    public void testQueryValue() throws Exception {
+        Object o = app.queryValue("SELECT nid FROM {node} WHERE nid=0");
+        assertNull(o);
+        long i = (Long)app.queryValue("SELECT COUNT(*) FROM {variable}");
+        assertTrue(i > 0);
     }
 
     // native decryption program.

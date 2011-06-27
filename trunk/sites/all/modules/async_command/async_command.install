@@ -7,7 +7,7 @@
  */
 
 /**
- * Implementation of hook_schema()
+ * Implements hook_schema().
  */
 function async_command_schema() {
   $schema = array();
@@ -31,7 +31,7 @@ function async_command_schema() {
         'type' => 'int',
         'not null' => TRUE,
         'default' => 0,
-        'description' => "Related entity_id for this command, if any. If no entity_id, set it to 0."
+        'description' => "Related entity_id for this command, if any. If no entity_id, set it to 0. This can also be considered as session_id."
       ),
       'app' => array(
         'description' => 'The application that generates/executes the command',
