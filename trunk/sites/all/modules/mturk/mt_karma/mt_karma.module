@@ -60,7 +60,7 @@ function mt_karma_theme($existing, $type, $theme, $path) {
     'leaderboard' => array(
       'variables' => array(
         'rows' => NULL,
-        'empty' => t("N/A."),
+        'empty' => t("N/A"),
       ),
       'template' => 'leaderboard',
     ),
@@ -155,7 +155,7 @@ abstract class MTKarmaLeaderboard {
     $rows = $this->generateRows();
     $content = theme('leaderboard', array(
       'rows' => $rows,
-      'empty' => t("N/A."),
+      'empty' => t("N/A"),
     ));
 
     return $content;
