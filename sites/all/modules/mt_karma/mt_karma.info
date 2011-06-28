@@ -8,9 +8,9 @@ dependencies[] = encset
 
 files[] = mt_karma.module
 files[] = leaderboard.tpl.php
-; Information added by drupal.org packaging script on 2011-06-03
-version = "7.x-1.0-alpha4"
+; Information added by drupal.org packaging script on 2011-06-28
+version = "7.x-1.0-alpha5"
 core = "7.x"
 project = "mt_karma"
-datestamp = "1307102544"
+datestamp = "1309221792"
 

@@ -140,7 +140,8 @@ class MTAnalysisApp(JythonDrupalApp):
       n = self.results['max_assignments']
       mat = [row for row in hit_group_matrix if sum(row) == n]
       self.results['fleiss_valid_hits'] = len(mat)
-      self.results['fleiss'] = computeKappa(mat)
+      if (self.results['fleiss_valid_hits'] > 0):
+        self.results['fleiss'] = computeKappa(mat)
     else:
       self.results['fleiss'] = 'All HITs needs to have the same maximum assignments in order to calculate Fleiss Kappa'
       self.results['fleiss_valid_hits'] = 0
