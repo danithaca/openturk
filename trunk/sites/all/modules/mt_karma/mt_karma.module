@@ -60,7 +60,7 @@ function mt_karma_theme($existing, $type, $theme, $path) {
     'leaderboard' => array(
       'variables' => array(
         'rows' => NULL,
-        'empty' => t("No worker has worked on this HIT task. Please load assignments first."),
+        'empty' => t("N/A."),
       ),
       'template' => 'leaderboard',
     ),
@@ -155,7 +155,7 @@ abstract class MTKarmaLeaderboard {
     $rows = $this->generateRows();
     $content = theme('leaderboard', array(
       'rows' => $rows,
-      'empty' => t("No worker has worked on this HIT task. Please load assignments first."),
+      'empty' => t("N/A."),
     ));
 
     return $content;

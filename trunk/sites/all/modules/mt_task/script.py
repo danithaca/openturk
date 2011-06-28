@@ -38,7 +38,10 @@ class MTTaskApp(JythonDrupalApp):
     access_key, secret_key = self._read_mt_properties(user_id, task_id)
     config.setAccessKeyId(access_key)
     config.setSecretAccessKey(secret_key)
-    self.service = RequesterService(config)
+    try:
+      self.service = RequesterService(config)
+    except:
+      raise DrupalRuntimeException("Cannot initialize RequesterService object to AMT. Please check you access key and security key.")
 
   # this is hard coded and default to all mt_task instances.
   def _default_config(self):
@@ -219,8 +222,8 @@ class MTTaskApp(JythonDrupalApp):
       ON u.uid=f.entity_id WHERE entity_type="user" AND bundle="user"')
     for row in rows:
       mt_settings = self.readEncryptedSettingsField(row['mt_properties_secure_value'], self.EncryptionMethod.MCRYPT)
-      worker_id = mt_settings['worker_id'].strip()
       if worker_id != None:
+        worker_id = worker_id.strip()
         # TODO: see #1148280 (http://drupal.org/node/1148280)
         if worker_id in mapping:
           print "WARNING: WORKER_ID ALREADY EXISTED!!!"  # but we do nothing for now.
