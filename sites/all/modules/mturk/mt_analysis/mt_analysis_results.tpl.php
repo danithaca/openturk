@@ -23,7 +23,9 @@
     </ul>
 
     <h2>Inter-rater agreement</h2>
-    <p><a href="http://en.wikipedia.org/wiki/Fleiss'_kappa">Fleiss' Kappa</a>: <strong><?php echo number_format($results['fleiss'], 3); ?></strong> (from <?php echo $results['fleiss_valid_hits']; ?> valid HITs).</p>
+    <p><a href="http://en.wikipedia.org/wiki/Fleiss'_kappa">Fleiss' Kappa</a>:
+      <strong><?php if (is_numeric($results['fleiss'])) echo number_format($results['fleiss'], 3); else echo $results['fleiss']; ?></strong> (from <?php echo $results['fleiss_valid_hits']; ?> valid HITs).
+    </p>
 
     <h2>CSV results</h2>
     <p>Download MT task results based on majority votes: <a href="<?php echo $results['csv_majority']; ?>">click here</a>.</p>

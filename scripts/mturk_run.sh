@@ -10,5 +10,5 @@ export CLASSPATH="${CLASSPATH}:$(find "$ASYNC_COMMAND_HOME/lib" -name "*.jar" | 
 export CLASSPATH="${CLASSPATH}:$(find "$MTURK_SDK_HOME/lib" -name "*.jar" | tr '\n' ':')"
 export PYTHONPATH=$PATHONPATH:$MTURK_MODULE_HOME/mt_task:$MTURK_MODULE_HOME/mt_analysis
 
-$JYTHON_HOME/jython $MTURK_MODULE_HOME/mt_task/script.py -c $CONFIG_FILE
-$JYTHON_HOME/jython $MTURK_MODULE_HOME/mt_analysis/script.py -c $CONFIG_FILE
+$JYTHON_HOME/jython $MTURK_MODULE_HOME/mt_task/mt_task.py -c $CONFIG_FILE
+$JYTHON_HOME/jython $MTURK_MODULE_HOME/mt_analysis/mt_analysis.py -c $CONFIG_FILE
