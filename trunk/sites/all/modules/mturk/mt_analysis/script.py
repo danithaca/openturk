@@ -64,6 +64,7 @@ class MTAnalysisApp(JythonDrupalApp):
     o = JSONObject()
     answer_json = dict(o.getClass().cast(JSONValue.parse(answer_json)))
     if self.main_question != None and self.main_question in answer_json:
+      # here we use the 'main question' setting.
       return answer_json[self.main_question]
     elif self.main_question == None and len(answer_json) > 0:
       # if main_question not set, use the first answer
@@ -88,7 +89,7 @@ class MTAnalysisApp(JythonDrupalApp):
 
 
     workers_set = set([])
-    answers_summary = {}
+    answers_summary = {}  # number of answers for each answer (needs to specify the 'main question' setting)
     assignments = self.query("SELECT t.hit_id, a.worker_id, a.assignment_status, a.answer_json\
         FROM {mt_task_hit} t INNER JOIN {mt_assignment} a ON t.hit_id=a.hit_id\
         WHERE task_id=?", self.task_id)
@@ -97,7 +98,7 @@ class MTAnalysisApp(JythonDrupalApp):
 
 
     # hit_group[hit_id] = {worker_id: answer}
-    hit_group = defaultdict(dict)
+    hit_group = defaultdict(dict)  # group all assignments according to hit_id. if not assignments, then no hit_id as key.
     for row in assignments:
       hit_id, worker_id, assignment_status, answer_json = row['hit_id'], row['worker_id'], row['assignment_status'], row['answer_json']
       answer = self._get_answer(answer_json)
@@ -116,7 +117,7 @@ class MTAnalysisApp(JythonDrupalApp):
     self.results['total_workers'] = len(workers_set)
 
 
-    hit_group_answers = {}  # hit_group_answers[hit_id] = {answer: # of answers}
+    hit_group_answers = defaultdict(dict)  # hit_group_answers[hit_id] = {answer: # of answers}
     hit_group_matrix = []  # this is a matrix with rows as hits, and columns as distinct answers, cell values as the number of HITs.
     all_answers = self.results['answers_summary'].keys()
     for hit_id, hit_assignments in hit_group.items():
@@ -157,7 +158,8 @@ class MTAnalysisApp(JythonDrupalApp):
 
       # remove ignored answers
       for a in self.ignored_answers:
-        del(answers_group[a])
+        if a in answers_group:
+          del(answers_group[a])
 
       if sum(answers_group.values()) < self.minimum_requirement or sum(answers_group.values()) == 0:
         final_answer = None
