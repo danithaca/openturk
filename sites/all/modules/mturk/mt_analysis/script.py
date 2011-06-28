@@ -143,6 +143,8 @@ class MTAnalysisApp(JythonDrupalApp):
       self.results['fleiss_valid_hits'] = len(mat)
       if (self.results['fleiss_valid_hits'] > 0):
         self.results['fleiss'] = computeKappa(mat)
+      else:
+        self.results['fleiss'] = 'No finished HITs yet.'
     else:
       self.results['fleiss'] = 'All HITs needs to have the same maximum assignments in order to calculate Fleiss Kappa'
       self.results['fleiss_valid_hits'] = 0
@@ -164,9 +166,9 @@ class MTAnalysisApp(JythonDrupalApp):
       if sum(answers_group.values()) < self.minimum_requirement or sum(answers_group.values()) == 0:
         final_answer = None
       else:
-        sorted_answers = answers_group.items()
+        sorted_answers = answers_group.items() # flatten the dict into a list of tuples
         sorted_answers.sort(key=lambda r: r[1], reverse=True)
-        diff = sorted_answers[0][1] - sorted_answers[1][1] if (sorted_answers) > 1 else sorted_answers[0][1]
+        diff = sorted_answers[0][1] - sorted_answers[1][1] if len(sorted_answers) > 1 else sorted_answers[0][1]
         if diff >= self.majority_advantage:
           final_answer = sorted_answers[0][0]
         else:

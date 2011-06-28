@@ -8,8 +8,8 @@ dependencies[] = encset
 
 files[] = mt_task.module
 ; Information added by drupal.org packaging script on 2011-06-28
-version = "7.x-1.0-alpha2"
+version = "7.x-1.0-alpha3"
 core = "7.x"
 project = "mturk"
-datestamp = "1309263120"
+datestamp = "1309269419"
 
