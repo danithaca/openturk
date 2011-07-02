@@ -52,3 +52,56 @@ class MTUtilsStandalone(MTTaskApp):
       rp = workers[batch*batch_size : (batch+1)*batch_size]
       print "Sending messages to", len(rp), "recipients"
       self.service.notifyWorkers(subject, message, rp)
+
+
+  def _register_hit_type(self, hit_properties):
+    props = HITProperties(hit_properties)
+    hittypeid = self.service.registerHITType(
+      props.getAutoApprovalDelay(),
+      props.getAssignmentDuration(),
+      props.getRewardAmount(),
+      #props.getTitle() + appendix,
+      props.getTitle(),
+      props.getKeywords(),
+      props.getDescription(),
+      props.getQualificationRequirements() )
+    print "Created hittype:", hittypeid
+    return hittypeid
+
+
+  # hit_properties: the file that defines HIT properties
+  # question_template: the file that defines the question template.
+  def upload_hits_from_db(self, hit_properties, question_template, sql):
+    import cgi
+    props = HITProperties(hit_properties)
+    hq = HITQuestion(question_template)
+    hit_type_id = self._register_hittype()
+    conn, cursor = self.get_db_conn()
+    limit = 50
+
+    cursor.execute(sql)
+    for id, title, url, teaser, diggs_fromapi in cursor.fetchall():
+      if diggs_fromapi < 10:
+        cursor.execute("select count(*) from digg_digg where storyid='%s'" % (id))
+        diggs_crawler = cursor.fetchone()[0]
+        if diggs_crawler < 10:
+          continue  # if diggs < 10, we don't pump into mturk.
+      row = {}
+      row['id'] = id
+      row['title'] = cgi.escape(title).replace('"', "'").decode('utf-8', 'replace')
+      row['teaser'] = cgi.escape(teaser).replace('"', "'").decode('utf-8', 'replace')
+      row['url'] = url
+      if url.find('nytimes.com')!=-1 or url.find("newsweek.com")!=-1:
+        row['preview'] = "no"
+      else:
+        row['preview'] = "yes"
+
+      #print row['title'], row['teaser']
+      question = hq.getQuestion(row)
+      #print id, question
+      # this is actually to RequestServiceRaw.
+      hit = self.service.createHIT( hittypeid, None, None, None, question, None, None, None, props.getLifetime(), props.getMaxAssignments(), id, None, None)
+      hitid = hit.getHITId()
+      print "Created", id, hitid
+      cursor.execute("INSERT INTO mt_task_hit(mt_task_id, annotation_id, hit_id, created) VALUE(%s, '%s', '%s', unix_timestamp())" % (self.mt_task_id, id, hitid))
+    conn.close()

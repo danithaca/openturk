@@ -56,7 +56,7 @@ function mt_task_menu() {
       'title' => 'AMT Operations',
       'description' => 'Operations you can do with this AMT task',
       'page callback' => 'drupal_get_form',
-      'page arguments' => array('mt_task_view_operations'),
+      'page arguments' => array('mt_task_view_operations_form'),
       'access callback' => 'mt_task_access',
       'access arguments' => array(1),
       'type' => MENU_LOCAL_TASK,
@@ -66,7 +66,7 @@ function mt_task_menu() {
   return $items;
 }
 
-function mt_task_view_operations() {
+function mt_task_view_operations_form() {
   $task_id = arg(1);
   $operations = module_invoke_all('mt_operations');
   $options = array();
@@ -107,7 +107,7 @@ function mt_task_view_operations() {
   return $form;
 }
 
-function mt_task_view_operations_submit($form, &$form_state) {
+function mt_task_view_operations_form_submit($form, &$form_state) {
   $op_array = explode(':', $form_state['values']['operations']);
   $app = $op_array[0];
   $command = $op_array[1];

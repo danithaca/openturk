@@ -457,7 +457,7 @@ class MTKarmaResponsiveness extends MTKarmaLeaderboard {
     foreach ($median as $n => $s) {
       $row['name'] = $n;
       $m = round($s/60);
-      $row['points'] = round($m/60) .'h'. $m%60 .'m';
+      $row['points'] = floor($m/60) .'h'. $m%60 .'m';
       $rows[] = $row;
     }
     return $rows;

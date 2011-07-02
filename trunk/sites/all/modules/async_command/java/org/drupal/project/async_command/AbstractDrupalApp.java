@@ -339,6 +339,7 @@ abstract public class AbstractDrupalApp {
         else if (command.hasOption('e')) {
             // run command directly and exit.
             initDrupalConnection();
+            prepareApp();
             String evalStr = command.getOptionValue('e');
             try {
                 Result result = runCommand(evalStr);

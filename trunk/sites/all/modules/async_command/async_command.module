@@ -10,6 +10,7 @@
 
 /**
  * add a command
+ * @return the ID of the newly created async command.
  */
 function async_command_create_command($app, $command, $options = array()) {
   global $user;
@@ -28,7 +29,7 @@ function async_command_create_command($app, $command, $options = array()) {
   }
   //$timestamp = date('c');
   $timestamp = time();
-  db_insert('async_command')
+  $id = db_insert('async_command')
     ->fields(array(
       'app' => $app,
       'uid' => $uid,
@@ -38,6 +39,8 @@ function async_command_create_command($app, $command, $options = array()) {
       'changed' => isset($options['changed']) ? $options['changed'] : $timestamp,
     ))
     ->execute();
+
+  return $id;
 }
 
 
