@@ -177,7 +177,7 @@ class MTAnalysisApp(JythonDrupalApp):
 
 
     self._save_results()
-    pprint(self.results)
+    #pprint(self.results)
     return Result(True, 'successfully computed results.')
 
 
