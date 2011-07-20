@@ -285,6 +285,24 @@ class MTTaskApp(JythonDrupalApp):
     return Result(True, msg)
 
 
+  def send_message(self, message_id, batch_size = 50):
+    ''' Send message to selected workers. '''
+    row = self.query('SELECT subject, message FROM {mt_message} WHERE message_id=?', message_id)[0]
+    subject, message = row['subject'], row['message']
+    workers = []
+    recipients = self.query('SELECT worker_id FROM {mt_message_worker} WHERE message_id=?', message_id)
+    for row in recipients:
+      workers.append(row['worker_id'])
+    
+    batches = (len(workers)-1)/batch_size + 1
+    for batch in range(batches):
+      rp = workers[batch*batch_size : (batch+1)*batch_size]
+      #print "Sending messages to", len(rp), "recipients"
+      self.service.notifyWorkers(subject, message, rp)
+    
+    return Result(True, 'Sent message successful to ' + str(len(workers)) + ' workers')
+
+
 if __name__ == '__main__':
   app = MTTaskApp()
   app.handleCLI(sys.argv)

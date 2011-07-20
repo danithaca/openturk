@@ -13,7 +13,7 @@ export CLASSPATH="${CLASSPATH}:$(find "$ASYNC_COMMAND_HOME/lib" -name "*.jar" | 
 export CLASSPATH="${CLASSPATH}:$(find "$MTURK_SDK_HOME/lib" -name "*.jar" | tr '\n' ':')"
 
 # using the default config.properties file in the working directory.
-$JYTHON_HOME/jython script.py
+$JYTHON_HOME/jython mt_task/mt_task.py
 
 # or, execute the command, find config.properties specified by CONFIG_FILE
-#JYTHON_HOME/jython script.py -c $CONFIG_FILE
+$JYTHON_HOME/jython mt_task/mt_task.py -c $CONFIG_FILE

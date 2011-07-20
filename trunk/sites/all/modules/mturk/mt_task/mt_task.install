@@ -422,6 +422,88 @@ function mt_task_schema() {
       ),
     ),
   );
+  
+  $schema['mt_message'] = array(
+    'description' => 'This is the table to store message sent history.',
+    'fields' => array(
+      'message_id' => array(
+        'description' => 'Unique id for the messaging history',
+        'type' => 'serial',
+        'size' => 'normal',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'task_id' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'description' => 'The task_id where this message is associated.',
+      ),
+      'subject' => array(
+        'description' => 'The subject to send to the worker.',
+        'type' => 'varchar',
+        'length' => '200',
+        'not null' => TRUE,
+      ),
+      'message' => array(
+        'description' => 'The message to send to the worker.',
+        'type' => 'varchar',
+        'length' => '1000',
+        'not null' => TRUE,
+      ),
+      'execution_id' => array(
+        'description' => 'The id of async_command to be executed.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => FALSE,
+      ),
+      'created' => array(
+        'description' => 'The Unix timestamp this bonus is created.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('message_id'),
+    'foreign keys' => array(
+      'task_id' => array(
+        'table' => 'node',
+        'columns' => array('task_id' => 'nid'),
+      ),
+      'execution_id' => array(
+        'table' => 'async_command',
+        'columns' => array('execution_id' => 'id'),
+      ),
+    ),
+  );
+  
+  $schema['mt_message_worker'] = array(
+    'description' => 'This is the message<->recipient table. many-to-many',
+    'fields' => array(
+      'message_id' => array(
+        'description' => 'Unique id for the message',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'worker_id' => array(
+        'description' => 'The worker id for the message recipient. length is 14',
+        'type' => 'char',
+        'not null' => TRUE,
+        'length' => 14,
+      ),
+    ),
+    'primary key' => array('message_id', 'worker_id'),
+    'foreign keys' => array(
+      'message_id' => array(
+        'table' => 'mt_message',
+        'columns' => array('message_id' => 'message_id'),
+      ),
+      'worker_id' => array(
+        'table' => 'mt_worker',
+        'columns' => array('worker_id' => 'worker_id'),
+      ),
+    ),
+  );
 
   return $schema;
 }
@@ -440,3 +522,13 @@ function mt_task_update_7001() {
     'not null' => FALSE,
   ));
 }
+
+/**
+ * Implements hook_update_N().
+ * Add {mt_message}
+ */
+function mt_task_update_7002() {
+  $schema = mt_task_schema();
+  db_create_table('mt_message', $schema['mt_message']);
+  db_create_table('mt_message_worker', $schema['mt_message_worker']);
+}  
