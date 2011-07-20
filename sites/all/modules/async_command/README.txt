@@ -1,48 +1,46 @@
-==== Install/Config ====
+===========================
+Async Command Documentation
+===========================
 
 
-This module comes with a few Java libraries to help you write scripts that access data stored in Drupal database. You can then use Drupal as the front end to display data, and the script to all computational intensive data processing. To install/config the module, follow these steps:
+Installation and Configuration
+------------------------------
 
-1. Follow the example of config.properties.example and create a config.properties file, which specifies the Drupal database access information.
-(optional: Move config.properties to sites/default to avoid getting wiped out during module update.)
-2. Follow the example of run.sh.example, and create a run.sh execution file to run Async Command script.
-(optional: Move run.sh to your home directory to avoid getting wiped out during update.)
-3. In a terminal window, execute "run.sh".
+This module is designed to help dependent modules run complex 3rd party programs outside of Drupal on a remote server. Please read documentation of the dependent module (eg Recommender API) for more information on Installation and Configuration.
 
-What happens then is that the script in "run.sh" will directly access the Drupal database, and run the commands in {async_command} table in the terminal.
+Conceptually, you need 2 computers: the Drupal server for your Drupal site, and the computation server for the 3rd party program. The Drupal server simply issues commands to the 3rd party program, which will be executed asynchronously on the computation server. On the Drupal server, the async_command module provides APIs to help dependent modules issue commands, display commands execution history, and so on. On the computation server, the async_command module provides a few Java libraries to help 3rd party programs access Drupal database (read data stored in Drupal, save data back into Drupal database, etc).
 
-You can copy the module to a remote server (doesn't require Drupal installation) and have the script run in the remote server.
+To install and config async_command, please follow these steps:
 
+**Step 1**. Install the Async Command module to your Drupal server under sites/all/modules/async_command. Then, copy the 'lib' sub-directory to any folder on the computation server. If your computation server is also your Drupal server, you can leave 'lib' as-is, but be aware that the 3rd party program might consume lots of resources on your Drupal server.
 
+**Step 2**. Follow the example of config.properties.example and create a config.properties file on your computation server. 
 
+**Step 3**. Follow the example of run.sh.example, and create run.sh on your computation server.
 
-===== For Developers =====
-
-
-Please see some examples of how to use the Java libraries in:
-http://drupal.org/project/mt_task
-http://drupal.org/project/recommender (developing)
-
-Basically, you'll need to write a Drupal module for user interaction and put commands in the {async_command} table using "async_command_create_command()". Then you'll write your data processing script by extending org.drupal.project.async_command.AbstractDrupalApp. For example, if you put command 'dummy("hello,world")' in {async_command}, the dummy() method in your script will get executed.
+**Step 4**. Make sure to read the documentation of dependent modules (eg Recommender API) for additional settings. And then you can execute "run.sh" to run the 3rd party program on the computation server.
 
 
 
-===== FAQ =====
+
+For Developers
+--------------
+
+Please see examples of how to write 3rd party programs using the async_command APIs:
+http://drupal.org/project/recommender (written in Java)
+http://drupal.org/project/mturk (written in Jython)
+
+For the Drupal server, you'll write a Drupal module for user interaction. You need "async_command_create_command()" to issue async commands. You need "async_command_retrieve_command_list()" and "theme_async_command_list()" to display commands execution history.
+
+For the computation server, you can write 3rd party programs by extending "org.drupal.project.async_command.AbstractDrupalApp". This class provides basic functions to read Drupal system variables, read commands stored {async_command} table, and so on. If you issue the command 'dummy("hello,world")' in {async_command}, the 'dummy(String s)' method in your 3rd party program would get executed.
 
 
-Q: Why not using Drupal Queue (D7)?
-A: Drupal Queue requires working in the same Drupal server, and requires PHP. Async Command intends to do it on a remote server with different programming languages.
 
-Q: What's the difference with background_queue.module or imageinfo_cache.module
-A: Those modules run in PHP, whereas this module runs for any scripts/programs
+FAQ
+------------
 
-Q: Where to get support?
+Q: Why is async_command different from Drush, Batch API, Queue API, or the Beanstalk module?
+A: See answers on http://drupal.org/project/async_command.
+
+Q: How to get support?
 A: Please create issues on http://drupal.org/project/async_command.
-
-
-
-===== Contact =====
-
-Daniel Zhou
-danithaca@gmail.com
-http://michiza.com

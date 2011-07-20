@@ -2,10 +2,12 @@
 
 ##### database configuration #####
 # For a list of the database configuration parameters, please see http://commons.apache.org/dbcp/configuration.html
+
 username=daniel
 password=1234567
 driverClassName=com.mysql.jdbc.Driver
 url=jdbc:mysql://localhost/drupal7
+
 
 
 ##### Additional settings #####
@@ -13,11 +15,11 @@ url=jdbc:mysql://localhost/drupal7
 # database prefix in Drupal
 #prefix=
 
-# mcrypt secret key. please specify if you use Encrypted Settings Field
+# mcrypt secret key. please specify if you use Encrypted Settings Field. Usually you can ignore it.
 #mcrypt_secret_key=
 
-# php cli executible.
+# PHP cli executible. Ignore unless the dependent module requires it.
 #php_cli=/usr/bin/php
 
-# max database batch UPDATE/INSERT/DELETE size. used in JDBC batchExecute()
+# max database batch size for UPDATE/INSERT/DELETE. used in JDBC batchExecute()
 #db_max_batch_size=5000

@@ -62,6 +62,16 @@ function mt_task_menu() {
       'type' => MENU_LOCAL_TASK,
       'weight' => 10,
     ),
+    'node/%/mt_message' => array(
+      'title' => 'AMT Message',
+      'description' => 'Allow requesters to send messages to designated workers.',
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('mt_task_message_form'),
+      'access callback' => 'mt_task_access',
+      'access arguments' => array(1),
+      'type' => MENU_LOCAL_TASK,
+      'weight' => 11,
+    ),
   );
   return $items;
 }
@@ -113,10 +123,110 @@ function mt_task_view_operations_form_submit($form, &$form_state) {
   $command = $op_array[1];
   $task_id = $form_state['values']['task_id'];
   
-  async_command_create_command($app, $command, array('eid'=>$task_id));
-  // note: @command will be check_plain() automatically.
-  drupal_set_message(t('We have put your request @command in the queue. It will be executed soon. Please refresh the page to see the update.', array('@command' => $command)));
-  drupal_goto("node/$task_id/mt_operations");
+  $operations = module_invoke_all('mt_operations');
+  if (isset($operations[$app][$command]['callback function'])) {
+    $callback = $operations[$app][$command]['callback function'];
+    $parameters = $operations[$app][$command]['callback arguments'];
+    // note: drupal_get_form() doesn't work. you can only goto a page that has a form in it.
+    call_user_function_array($callback, $parameters);
+    //drupal_goto("node/$task_id/mt_bonus");
+  }
+  else {
+    async_command_create_command($app, $command, array('eid'=>$task_id));
+    // note: @command will be check_plain() automatically.
+    drupal_set_message(t('We have put your request @command in the queue. It will be executed soon. Please refresh the page to see the update.', array('@command' => $command)));
+    drupal_goto("node/$task_id/mt_operations");
+  }
+}
+
+
+function mt_task_message_form() {
+  $task_id = arg(1);
+  $form = array();
+  
+  $results = db_query('SELECT w.worker_id, w.display_name, count(*) AS total_assignments FROM {mt_worker} w INNER JOIN {mt_assignment} a ON w.worker_id = a.worker_id
+  	INNER JOIN {mt_task_hit} t ON a.hit_id = t.hit_id WHERE t.task_id=:task_id GROUP BY w.worker_id, w.display_name', array(':task_id' => $task_id));
+  $workers = array();
+  foreach ($results as $result) {
+    $workers[$result->worker_id] = "{$result->display_name} ({$result->worker_id})";
+  }
+  
+  // if no workers, then simply return a message.
+  if (count($workers) == 0) {
+    $form['no_valid_message'] = array(
+      '#markup' => '<p>'. t('There are no workers who have worked on this task. Cannot send messages.') .'</p>',
+    );
+    return $form;
+  }
+  
+  $form['recipients'] = array(
+    '#title' => t('Please select the worker to send the message'),
+    //'#description' => t(''),
+    '#type' => 'select',
+    '#multiple' => TRUE,
+    '#options' => $workers,
+    '#required' => TRUE,
+  );
+  
+  $form['message_subject'] = array(
+    '#title' => t('Subject'),
+    //'#description' => t(''),
+    '#type' => 'textfield',
+    '#maxlength' => 200,
+    '#required' => TRUE,
+  );
+  
+  $form['message_body'] = array(
+    '#title' => t('Message'),
+    '#type' => 'textarea',
+    '#required' => TRUE,
+    '#maxlength' => 1000,
+  );
+
+  $form['task_id'] = array(
+    '#type' => 'hidden',
+    '#value' => $task_id,
+  );
+
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Send message'),
+  );
+  
+  return $form;
+}
+
+function mt_task_message_form_submit($form, &$form_state) {
+  $task_id = $form_state['values']['task_id'];
+  $recipients = $form_state['values']['recipients'];
+  $message_subject = $form_state['values']['message_subject'];
+  $message_body = $form_state['values']['message_body'];
+
+  $id = db_insert('mt_message')->fields(array(
+    'task_id' => $task_id,
+    'subject' => $message_subject,
+    'message' => $message_body,
+    'created' => time(),
+  ))->execute();
+  
+  $query = db_insert('mt_message_worker')->fields(array('message_id', 'worker_id'));
+  foreach ($recipients as $worker_id) {
+    $query->values(array(
+      'message_id' => $id,
+      'worker_id' => $worker_id,
+    ));
+  }
+  $query->execute();
+
+  // create the command
+  $execution_id = async_command_create_command('mt_task', "send_message({$id}) # {$message_subject}", array('eid'=>$task_id));
+
+  db_update('mt_message')
+    ->fields(array('execution_id' => $execution_id))
+    ->condition('message_id', $id)
+    ->execute();
+
+  drupal_set_message('You message has been sent.');
 }
 
 

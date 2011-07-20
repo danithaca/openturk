@@ -137,3 +137,15 @@ function mt_bonus_mt_operations() {
     'mt_bonus' => array(),
   );
 }
+/*function mt_bonus_mt_operations() {
+  return array(
+    'mt_bonus' => array(
+      'grant_bonus' => array(
+  		'title' => t('Grant Bonus'),
+        'description' => t('Allow requesters to grant bonus to designated workers.'),
+        'callback function' => 'drupal_get_form',
+        'callback arguments' => array('mt_bonus_grant_form'),
+      ),
+    ),
+  );
+}*/
