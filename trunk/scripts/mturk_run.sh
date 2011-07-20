@@ -8,7 +8,9 @@ CONFIG_FILE=$OPENTURK_HOME/sites/default/config.properties
 
 export CLASSPATH="${CLASSPATH}:$(find "$ASYNC_COMMAND_HOME/lib" -name "*.jar" | tr '\n' ':')"
 export CLASSPATH="${CLASSPATH}:$(find "$MTURK_SDK_HOME/lib" -name "*.jar" | tr '\n' ':')"
-export PYTHONPATH=$PATHONPATH:$MTURK_MODULE_HOME/mt_task:$MTURK_MODULE_HOME/mt_analysis
+export PYTHONPATH=$PYTHONPATH:$MTURK_MODULE_HOME/mt_task:$MTURK_MODULE_HOME/mt_analysis
+export JYTHONPATH=$PYTHONPATH
 
 $JYTHON_HOME/jython $MTURK_MODULE_HOME/mt_task/mt_task.py -c $CONFIG_FILE
 $JYTHON_HOME/jython $MTURK_MODULE_HOME/mt_analysis/mt_analysis.py -c $CONFIG_FILE
+$JYTHON_HOME/jython $MTURK_MODULE_HOME/mt_bonus/mt_bonus.py -c $CONFIG_FILE
