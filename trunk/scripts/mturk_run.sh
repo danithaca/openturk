@@ -2,7 +2,7 @@ OPENTURK_HOME=/home/mrzhou/openturk
 ASYNC_COMMAND_HOME=$OPENTURK_HOME/sites/all/modules/async_command
 MTURK_MODULE_HOME=$OPENTURK_HOME/sites/all/modules/mturk
 MTURK_SDK_HOME=/opt/java-aws-mturk-1.2.2
-JYTHON_HOME=/opt/jython-2.5.2rc4
+JYTHON_HOME=/opt/jython-2.5.2
 CONFIG_FILE=$OPENTURK_HOME/sites/default/config.properties
 
 
