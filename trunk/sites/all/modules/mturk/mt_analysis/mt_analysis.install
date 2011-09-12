@@ -25,6 +25,7 @@ function mt_analysis_schema() {
       'results_json' => array(
         'description' => 'The results of the analysis on the task. in JSON.',
         'type' => 'text',
+        'size' => 'big',
         'not null' => FALSE,
       ),
       'updated' => array(
@@ -58,4 +59,12 @@ function mt_analysis_update_7002() {
     'description' => 'The access key to download JSON/CSV results in a program.',
     //'initial' => '0123456789',
   ));
+}
+
+/**
+ * Make results_json big.
+ */
+function mt_analysis_update_7003() {
+  $schema = mt_analysis_schema();
+  db_change_field('mt_analysis', 'results_json', 'results_json', $schema['mt_analysis']['fields']['results_json']);
 }
