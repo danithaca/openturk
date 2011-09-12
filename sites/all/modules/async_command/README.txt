@@ -22,9 +22,8 @@ To install and config async_command, please follow these steps:
 
 
 
-
 For Developers
---------------
+-------------------------------
 
 Please see examples of how to write 3rd party programs using the async_command APIs:
 http://drupal.org/project/recommender (written in Java)
@@ -34,6 +33,7 @@ For the Drupal server, you'll write a Drupal module for user interaction. You ne
 
 For the computation server, you can write 3rd party programs by extending "org.drupal.project.async_command.AbstractDrupalApp". This class provides basic functions to read Drupal system variables, read commands stored {async_command} table, and so on. If you issue the command 'dummy("hello,world")' in {async_command}, the 'dummy(String s)' method in your 3rd party program would get executed.
 
+To use the Java libraries in languages other than Jython/JRuby/Groovy/Java, please refer to JSR 223 (http://download.oracle.com/javase/6/docs/technotes/guides/scripting/index.html)
 
 
 FAQ

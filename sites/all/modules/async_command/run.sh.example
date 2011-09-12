@@ -7,7 +7,7 @@
 #CONFIG_FILE=/home/to/config.properties
 
 # please make sure you have java installed.
-command -v java1 >/dev/null || { echo "Cannot find java program. Please install Java first and make sure the executable is under PATH."; exit 1;}
+command -v java >/dev/null || { echo "Cannot find java program. Please install Java first and make sure the executable is under PATH."; exit 1;}
 
 # config CLASSPATH: add all jar files under lib.
 CLASSPATH="${CLASSPATH}:$(find "lib" -name "*.jar" | tr '\n' ':')"

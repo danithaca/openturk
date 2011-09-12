@@ -31,9 +31,9 @@ abstract public class AbstractDrupalApp {
     protected RunningMode runningMode = RunningMode.ONCE;
     protected Properties config = new Properties();
 
-    String configFilePath = getDefaultConfigFilePath();
-    String dbPrefix;
-    int maxBatchSize;
+    private String configFilePath = getDefaultConfigFilePath();
+    private String dbPrefix;
+    protected int maxBatchSize;
 
     /**
      * @return The name of the drupal application.
@@ -133,7 +133,7 @@ abstract public class AbstractDrupalApp {
     }
 
 
-    void updateRecord(int id, boolean status, String message) {
+    protected void updateRecord(int id, boolean status, String message) {
         long changed = new Date().getTime() / 1000;
         try {
             update("UPDATE {async_command} SET status=?, message=?, changed=? WHERE id=?", status, message, changed, id);
@@ -146,17 +146,23 @@ abstract public class AbstractDrupalApp {
     /**
      * establish database connection to Drupal database. set dataSource property abd other parameters.
      */
-    void initDrupalConnection() {
+    protected void initDrupalConnection() {
         assert dataSource == null;  // assert that it hasn't been initialized yet.
         try {
             File configFile = new File(configFilePath);
-            if (!configFile.exists()) {
-                throw new DrupalRuntimeException("Database configuration file "+ configFilePath +" doesn't exists.");
+            File settingsPhpFile = getDefaultSettingsPhpFile();
+            if (configFile.exists()) {
+                // read configuration file.
+                Reader configReader = new FileReader(configFile);
+                config.load(configReader);
+            } else if (settingsPhpFile.exists()) {
+                // read settings.php file instead
+                logger.info("Fallback using Drupal setting.php file.");
+                loadSettingsPhp(settingsPhpFile);
+            } else {
+                throw new DrupalRuntimeException("Database configuration file "+ configFilePath +" doesn't exists, and cannot find settings.php either. Please see documentation on how to configure the module.");
             }
 
-            // read configuration file.
-            Reader configReader = new FileReader(configFile);
-            config.load(configReader);
 
             // set Drupal db prefix
             if (config.containsKey("prefix")) {
@@ -182,6 +188,32 @@ abstract public class AbstractDrupalApp {
             throw new DrupalRuntimeException(e);
         }
         // test connection
+    }
+
+    /**
+     * see drush/includes/environment.inc => drush_site_path()
+     * For now, we assume the DrupalApp jar is under 'sites/all/modules', and we find 'sites/default/settings.php'. We won't handle other more sophisticated cases.
+     * @return File sites/default/settings.php
+     */
+    protected File getDefaultSettingsPhpFile() {
+        //StringBuilder path = new StringBuilder();
+        //String jarDir = getClass().getResource("").getPath();
+        // this doesn't work if the folders are symbolic links.
+        //path.append(jarDir).append("..").append(File.separator).append("..").append(File.separator).append("default").append(File.separator).append("settings.php");
+        //return path.toString();
+
+        File jarDir = new File(getClass().getProtectionDomain().getCodeSource().getLocation().getPath()); // this is URL path.
+        String jarDirStr = jarDir.getAbsolutePath(); // this is the file system path.
+        logger.info("Jar file location: " + jarDirStr);
+
+        String identityStr = "sites" + File.separator + "all" + File.separator + "modules" + File.separator;
+        int pos = jarDirStr.indexOf(identityStr);
+        if (pos != -1) {
+            return new File(jarDirStr.substring(0, pos) + "sites" + File.separator + "default" + File.separator + "settings.php");
+        } else {
+            // TODO: later we might try using System.getProperty("user.dir") and then locate the settings.php file.
+            return new File("settings.php");  // now we only return the file under current working dir
+        }
     }
 
     public void testConnection() {
@@ -361,7 +393,10 @@ abstract public class AbstractDrupalApp {
         if (command.hasOption('c')) {
             configFilePath = command.getOptionValue('c');
             logger.info("Set configuration file as: " + configFilePath);
+        } else {
+            configFilePath = getDefaultConfigFilePath();
         }
+
         if (command.hasOption('r')) {
             String rm = command.getOptionValue('r');
             if (rm.equals("once")) {
@@ -438,6 +473,45 @@ abstract public class AbstractDrupalApp {
         return readEncryptedSettingsField(value, EncryptionMethod.MCRYPT);
     }
 
+    /**
+     * Read Drupal settings.php, and set 'config' accordingly.
+     * @param settingsPhp
+     */
+    protected void loadSettingsPhp(File settingsPhp) throws IOException {
+        String phpCode = "include '" + settingsPhp.getAbsolutePath() + "'; echo serialize($databases['default']['default']);";
+        String dbSettingsStr = evalPhp(phpCode);
+        //logger.info(dbSettingsStr);
+        Map<String, Object> dbSettings = unserializePhpArray(dbSettingsStr);
+        config.put("username", dbSettings.get("username"));
+        config.put("password", dbSettings.get("password"));
+        config.put("prefix", dbSettings.get("prefix"));
+
+        String driverName = ((String) dbSettings.get("driver")).toLowerCase();
+        String driverClassName;
+        StringBuilder url = new StringBuilder();
+        if (driverName.startsWith("mysql")) {
+            driverName = "mysql";
+            driverClassName = "com.mysql.jdbc.Driver";
+        } else if (driverName.startsWith("pgsql")) {
+            driverName = "postgresql";
+            driverClassName = "org.postgresql.Driver";
+        } else {
+            throw new DrupalRuntimeException("Only support MySQL and PostgreSQL for now. Please use the config.properties file if you use other DBMS.");
+        }
+        url.append("jdbc:").append(driverName).append("://").append(dbSettings.get("host"));
+        if (dbSettings.containsKey("port") && !dbSettings.get("port").equals("")) {
+            url.append(":").append(dbSettings.get("port"));
+        }
+        url.append('/').append(dbSettings.get("database"));
+
+        config.put("url", url.toString());
+        config.put("driverClassName", driverClassName);
+
+        phpCode = "include '" + settingsPhp.getAbsolutePath() + "'; echo isset($mcrypt_secret_key) ? $mcrypt_secret_key : substr($drupal_hash_salt, 0, 6);";
+        String secretKey = evalPhp(phpCode);
+        config.put("mcrypt_secret_key", secretKey);
+    }
+
 
     /**
      * Be very careful of using single quote in pattern. Needs to use two single quotes for PHP string.
@@ -466,13 +540,7 @@ abstract public class AbstractDrupalApp {
                 throw new DrupalRuntimeException("Unexpected PHP error: " + process.exitValue());
             }
             // read output
-            StringBuilder sb = new StringBuilder();
-            int c;
-            Reader input = new InputStreamReader(process.getInputStream());
-            while ((c = input.read()) != -1) {
-                sb.append((char)c);
-            }
-            return sb.toString();
+            return getReaderContent(new InputStreamReader(process.getInputStream()));
         } catch (IOException e) {
             logger.severe("Cannot run PHP code. Possible reasons: missing PHP CLI executable or dependent libraries.");
             throw new DrupalRuntimeException(e);
@@ -481,6 +549,16 @@ abstract public class AbstractDrupalApp {
             throw new DrupalRuntimeException(e);
         }
     }
+
+    protected String getReaderContent(Reader input) throws IOException {
+        StringBuilder sb = new StringBuilder();
+        int c;
+        while ((c = input.read()) != -1) {
+            sb.append((char)c);
+        }
+        return sb.toString();
+    }
+
 
     protected Map<String, Object> unserializePhpArray(String serialized) {
         SerializedPhpParser serializedPhpParser = new SerializedPhpParser(serialized);
