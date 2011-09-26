@@ -20,7 +20,7 @@ class MTAnalysisApp(JythonDrupalApp):
     return 'mt_analysis'
 
   #Override
-  def prepareCommand(self, uid, eid, created):
+  def prepareCommand(self, uid, eid, created, command):
     self.timestamp = int(time.time())
     if uid!=0 and eid!=0:
       self.user_id, self.task_id = uid, eid

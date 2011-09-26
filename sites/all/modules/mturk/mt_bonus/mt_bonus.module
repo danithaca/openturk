@@ -27,7 +27,7 @@ function mt_bonus_grant_form() {
   $form = array();
   
   $results = db_query('SELECT w.worker_id, w.display_name, count(*) AS total_assignments FROM {mt_worker} w INNER JOIN {mt_assignment} a ON w.worker_id = a.worker_id
-  	INNER JOIN {mt_task_hit} t ON a.hit_id = t.hit_id WHERE t.task_id=:task_id GROUP BY w.worker_id, w.display_name', array(':task_id' => $task_id));
+  	INNER JOIN {mt_task_hit} t ON a.hit_id = t.hit_id WHERE t.task_id=:task_id GROUP BY w.worker_id, w.display_name ORDER BY w.display_name', array(':task_id' => $task_id));
   $workers = array();
   foreach ($results as $result) {
     $workers[$result->worker_id] = "{$result->display_name} ({$result->worker_id})";

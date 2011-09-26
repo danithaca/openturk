@@ -325,6 +325,7 @@ function mt_task_access($task_id) {
 function mt_task_cron() {
   // by default, avoid duplicate
   async_command_create_command('mt_task', 'update_worker()', array('uid' => 0));
+  // mt_task_assign_role();
 }
 
 
@@ -341,5 +342,43 @@ function mt_task_user_view($account, $view_mode, $langcode) {
       '#markup' => $worker_id,
       //'#weight' => -1,
     );
+  }
+}
+
+// not fully tested.
+function mt_task_assign_role() {
+  $worker_role = user_role_load_by_name('worker');
+  $requester_role = user_role_load_by_name('requester');
+
+  if (!empty($worker_role) && !empty($requester_role)) {
+		$uid_array = db_select('users','u')
+			->fields('u', array('uid'))
+			->condition('u.uid', 0, '<>')
+			->execute()
+			->fetchCol();
+
+    $workers = array();
+    $requesters = array();
+		foreach ($uid_array as $uid) {
+      $user_info = user_load($uid);
+			if (encset_ini_get($user_info->mt_properties_secure, 'worker_id', FALSE)) {
+        $workers[] = $uid;
+        //db_merge('users_roles')
+        //  ->key(array('uid' => $user_info->uid, 'rid' => $worker_role->rid))
+        //  ->fields(array('uid' => $user_info->uid, 'rid' => $worker_role->rid))
+        //  ->execute();
+			}
+      if (encset_ini_get($user_info->mt_properties_secure, 'access_key', FALSE) &&
+          encset_ini_get($user_info->mt_properties_secure, 'secret_key', FALSE)) {
+        $requesters[] = $uid;
+        //db_merge('users_roles')
+        //  ->key(array('uid' => $user_info->uid, 'rid' => $requester_role->rid))
+        //  ->fields(array('uid' => $user_info->uid, 'rid' => $requester_role->rid))
+        //  ->execute();
+      }
+		}
+
+    user_multiple_role_edit($workers, 'add_role', $worker_role->rid);
+    user_multiple_role_edit($requesters, 'add_role', $requester_role->rid);
   }
 }
