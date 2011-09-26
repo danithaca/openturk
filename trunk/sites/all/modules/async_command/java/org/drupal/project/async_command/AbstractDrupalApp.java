@@ -24,6 +24,7 @@ import java.util.logging.Logger;
  * If using SQL queries, please follow SQL-92 standard to allow maximum compatibility.
  */
 abstract public class AbstractDrupalApp {
+    private final String VERSION = "7_01";
 
     protected DataSource dataSource;
     protected Logger logger = Logger.getLogger(this.getClass().getName());
@@ -82,7 +83,7 @@ abstract public class AbstractDrupalApp {
             Result result = null;
             try {
                 // prepare the command
-                prepareCommand((Integer)commandRecord.get("uid"), (Integer)commandRecord.get("eid"), (Integer)commandRecord.get("created"));
+                prepareCommand((Integer)commandRecord.get("uid"), (Integer)commandRecord.get("eid"), (Integer)commandRecord.get("created"), command);
                 // execute the command
                 result = runCommand(command);
             } catch (EvaluationFailureException e) {
@@ -127,7 +128,7 @@ abstract public class AbstractDrupalApp {
     }
 
 
-    protected void prepareCommand(int uid, int eid, int created) {
+    protected void prepareCommand(int uid, int eid, int created, String command) {
         // do nothing in default settings.
         // subclass could do some preparation for the command based on uid and eid.
     }
@@ -141,6 +142,11 @@ abstract public class AbstractDrupalApp {
             logger.severe("Cannot update status in async_command.");
             throw new DrupalRuntimeException(e);
         }
+    }
+
+    // This is a dummy command to test connection.
+    public Result pingMe() {
+        return new Result(true, "Ping successful.");
     }
 
     /**
@@ -338,6 +344,8 @@ abstract public class AbstractDrupalApp {
      * @param args arguments from main()
      */
     public void handleCLI(String[] args) {
+        logger.info("DrupalApp VERSION: " + VERSION);
+
         // build command parser
         Options options = buildOptions();
         CommandLineParser parser = new PosixParser();

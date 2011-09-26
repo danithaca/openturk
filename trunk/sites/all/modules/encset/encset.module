@@ -139,6 +139,7 @@ function encset_field_validate($entity_type, $entity, $field, $instance, $langco
         // do nothing
         break;
       case 'ini':
+        _encset_check_version();
         foreach ($items as $delta => $item) {
           if (!empty($item['value']) && parse_ini_string($item['value']) == FALSE) {
               $errors[$field['field_name']][$langcode][$delta][] = array(
@@ -343,6 +344,7 @@ function encset_ini_get($field, $key, $default) {
     return $default;
   }
   $field_value = $field[LANGUAGE_NONE][0]['value'];
+  _encset_check_version();
   $ini = parse_ini_string($field_value);
   if (isset($ini[$key])) {
     return $ini[$key];
@@ -366,6 +368,7 @@ class EncsetINI {
   function __construct($field) {
     if (!empty($field)) {
       $field_value = $field[LANGUAGE_NONE][0]['value'];
+      _encset_check_version();
       $this->ini = parse_ini_string($field_value);
     }
   }
@@ -381,6 +384,34 @@ class EncsetINI {
     }
     else {
       return $default;
+    }
+  }
+}
+
+function _encset_check_version() {
+  if (!function_exists('parse_ini_string')) {
+    function parse_ini_string($str, $ProcessSections = false) {
+      $lines = explode("\n", $str);
+      $return = Array();
+      $inSect = false;
+      foreach ($lines as $line) {
+        $line = trim($line);
+        if (!$line || $line[0] == "#" || $line[0] == ";")
+          continue;
+        if ($line[0] == "[" && $endIdx = strpos($line, "]")) {
+          $inSect = substr($line, 1, $endIdx - 1);
+          continue;
+        }
+        if (!strpos($line, '=')) // (We don't use "=== false" because value 0 is not valid as well)
+          continue;
+
+        $tmp = explode("=", $line, 2);
+        if ($ProcessSections && $inSect)
+          $return[$inSect][trim($tmp[0])] = ltrim($tmp[1]);
+        else
+          $return[trim($tmp[0])] = ltrim($tmp[1]);
+      }
+      return $return;
     }
   }
 }

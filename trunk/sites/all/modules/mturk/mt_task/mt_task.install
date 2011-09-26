@@ -74,6 +74,16 @@ function mt_task_install() {
   foreach ($instances as $instance) {
     field_create_instance($instance);
   }
+	
+	// add 2 roles
+  $new_roles = array('requester', 'worker');
+  foreach ($new_roles as $r){
+    if(!user_role_load_by_name($r)){
+      $role = new stdClass();
+      $role->name = $r;
+      user_role_save($role);
+    }
+  }
 }
 
 
@@ -103,6 +113,14 @@ function mt_task_uninstall() {
 
   // Purge all field infromation
   field_purge_batch(1000);
+	
+	// purge the 2 roles added.
+  $newRoles = array('requester', 'worker');
+  foreach ($newRoles as $r){
+    if($role = user_role_load_by_name($r)){
+      user_role_delete($r);
+    }
+  }
 }
 
 /**

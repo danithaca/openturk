@@ -26,7 +26,7 @@ class MTTaskApp(JythonDrupalApp):
     return 'mt_task'
 
   #Override
-  def prepareCommand(self, uid, eid, created):
+  def prepareCommand(self, uid, eid, created, command):
     self.timestamp = int(time.time())
     if uid!=0 and eid!=0:
       self.init(uid, eid)

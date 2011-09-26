@@ -1,7 +1,5 @@
 <?php
 
-// $Id: $
-
 /**
  * This module provides a simple way to create commands for external programs/scripts to execute.
  *
@@ -59,7 +57,7 @@ function _async_command_table_fields() {
 }
 
 /**
- * Retrieve a list of commands given the conditions.
+ * Retrieve a list of commands given the conditions, in an array list.
  */
 function async_command_retrieve_command_list($app=NULL, $uid=NULL, $eid=NULL, $limit = 10) {
   $query = db_select('async_command', NULL, array('fetch' => PDO::FETCH_ASSOC));
@@ -123,7 +121,7 @@ function theme_async_command_list($variables) {
     $command['uid'] = $command['uid'] == 0 ? t('Anonymous') : user_load($command['uid'])->name;
     $command['created'] = format_date($command['created'], 'short');
     $command['changed'] = format_date($command['changed'], 'short');
-    $command['status'] = isset($command['status']) ? ( $command['status'] == 1 ? t('success') : '<em>'.t('failure').'</em>') : '';
+    $command['status'] = isset($command['status']) ? ( $command['status'] == 1 ? t('success') : '<em>'. t('failure') .'</em>') : '&lt;'. t('pending...') .'&gt;';
     $command['message'] = check_plain($command['message']);
 
     $row = array();
