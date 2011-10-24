@@ -10,7 +10,7 @@ from org.json.simple import JSONValue, JSONObject
 from collections import defaultdict
 from pprint import pprint
 from fleiss import computeKappa
-import xml.dom.minidom, sys, time, random, string
+import xml.dom.minidom, sys, time, random, string, datetime
 
 
 class MTAnalysisApp(JythonDrupalApp):
@@ -174,12 +174,85 @@ class MTAnalysisApp(JythonDrupalApp):
         else:
           final_answer = None
       self.results['results_majority'].append((hit_id, annotation_id, combined_answer, final_answer))
+      
+      
+    # compute leaderboard
+    
 
 
     self._save_results()
     #pprint(self.results)
     return Result(True, 'successfully computed results.')
 
+
+class MTKarmaLeaderboard(JythonDrupalApp):
+  
+    #Override
+  def identifier(self):
+    return 'mt_karma'
+  
+  def __init__(self, task_id):
+    self.task_id = task_id;
+    settings_str = self.queryValue('SELECT mt_properties_secure_value FROM {field_data_mt_properties_secure} \
+      WHERE entity_type="node" AND bundle="mt_task" AND entity_id=?', self.task_id)
+    self.settings = self.readEncryptedSettingsField(task_encrypted_settings)
+    self.processCommonSettings()
+  
+  def processCommonSettings(self):
+    self.topN = int(self.settings.get('leaderboard_top_n', 10))
+    self.disable = bool(self.settings.get(self.identifier() + '_disable', False))
+    self.minimum = int(self.settings.get('leaderboard_minimum_requirement', 0))
+    period = self.settings.get('leaderboard_valid_period', '').split('/')
+    if (len(period) == 2):
+      self.begin_timestamp = time.mktime(time.strptime(period[0], '%Y-%m-%d'))
+      self.end_timestamp = time.mktime(time.strptime(period[1], '%Y-%m-%d'))
+  
+  def computeRanks(self):
+    assert False, 'Please override'
+    
+  def computeBonus(self):
+    key = self.identifier() + '_bonus_fixed'
+    bonus_str = self.settings.get(key, '')
+    if len(bonus_str) == 0:
+      return []
+    else:
+      return map(float, bonus_str.split(','))
+      
+  def generateRows(self):
+    ranks = self.computeRanks()
+    bonuses = self.computeBonus()
+    rows = []
+    for position, record in enumerate(ranks):
+      bonus = 0.0
+      if (position < len(bonuses)):
+        bonus = bonuses[position]
+      rows.append({'name': record['name'], 'points': record['points'], 'bonus': bonus})
+    return rows;
+  
+  def retrieveProductivityPoints(minimum=None, limit=None, begin=None, end=None, sort=False):
+    sql = 'SELECT w.display_name AS name, COUNT(a.assignment_id) AS points FROM {mt_assignment} a INNER JOIN {mt_task_hit} h ON a.hit_id=h.hit_id \
+      INNER JOIN {mt_worker} w ON w.worker_id=a.worker_id GROUP BY name WHERE a.assignment_status="Approved" AND h.task_id = ' + self.task_id
+    if begin > 0:
+      sql += ' AND a.submit_time >= ' + begin
+    if end > 0:
+      sql += ' AND a.submit_time <= ' + end
+    if minimum > 0:
+      sql += ' HAVING points > ' + minimum
+    if sort != None:
+      sql += ' ORDER BY points DESC'
+    results = self.query(sql)
+    if limit > 0:
+      results = results[:limit]
+  
+  
+class MTKarmaProductivity(MTKarmaLeaderboard):
+  def identifier(self):
+    return 'productivity'
+    
+  def computeRanks(self):
+    return self.retrieveProductivityPoints(self.minimum, self.topN, self.begin_timestamp, self.end_timestamp, True)  
+
+  
 
 if __name__ == '__main__':
   app = MTAnalysisApp()
