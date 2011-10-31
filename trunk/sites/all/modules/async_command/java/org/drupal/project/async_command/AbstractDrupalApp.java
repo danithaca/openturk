@@ -24,7 +24,7 @@ import java.util.logging.Logger;
  * If using SQL queries, please follow SQL-92 standard to allow maximum compatibility.
  */
 abstract public class AbstractDrupalApp {
-    private final String VERSION = "7_01";
+    private final String VERSION = "7_0_06";
 
     protected DataSource dataSource;
     protected Logger logger = Logger.getLogger(this.getClass().getName());
@@ -44,7 +44,8 @@ abstract public class AbstractDrupalApp {
     public enum RunningMode {
         ONCE,
         CONTINUOUS,
-        LISTENING
+        LISTENING,
+        FIRST
     }
 
     public enum EncryptionMethod {
@@ -58,9 +59,11 @@ abstract public class AbstractDrupalApp {
      */
     public void runApp() {
         // first, try to establish drupal database connection
+        logger.info("Initialize Drupal connection.");
         initDrupalConnection();
 
         // prepare to run App.
+        logger.info("Preparing Drupal applet.");
         prepareApp();
 
         // retrieve a list of command.
@@ -100,6 +103,35 @@ abstract public class AbstractDrupalApp {
             logger.info("Result: " + result.getStatus());
         }
     }
+
+    // get a list of commands not finished from an app.
+    public List<Command> retrievePendingCommand(String app) {
+        assert dataSource != null;
+        ArrayList<Command> commandList = new ArrayList<Command>();
+
+        List<Map<String, Object>> dbResults = null;
+        try {
+            dbResults = query("SELECT id, command, uid, eid, created FROM {async_command} " +
+                    "WHERE app=? AND status IS NULL ORDER BY created", identifier());
+        } catch (SQLException e) {
+            logger.severe("Cannot query async_command table.");
+            throw new DrupalRuntimeException(e);
+        }
+
+        for (Map<String, Object> commandRecord : dbResults) {
+            Command command = new Command(
+                    ((Long)(commandRecord.get("id"))).intValue(),
+                    (String)(commandRecord.get("command")),
+                    (Integer)commandRecord.get("uid"),
+                    (Integer)commandRecord.get("eid"),
+                    (Integer)commandRecord.get("created")
+                    );
+            commandList.add(command);
+        }
+
+        return commandList;
+    }
+
 
     /**
      * Subclass can choose to run some code in order to prepare for the DrupalApp.
@@ -152,49 +184,82 @@ abstract public class AbstractDrupalApp {
     /**
      * establish database connection to Drupal database. set dataSource property abd other parameters.
      */
-    protected void initDrupalConnection() {
-        assert dataSource == null;  // assert that it hasn't been initialized yet.
-        try {
-            File configFile = new File(configFilePath);
-            File settingsPhpFile = getDefaultSettingsPhpFile();
-            if (configFile.exists()) {
-                // read configuration file.
-                Reader configReader = new FileReader(configFile);
-                config.load(configReader);
-            } else if (settingsPhpFile.exists()) {
-                // read settings.php file instead
-                logger.info("Fallback using Drupal setting.php file.");
-                loadSettingsPhp(settingsPhpFile);
-            } else {
-                throw new DrupalRuntimeException("Database configuration file "+ configFilePath +" doesn't exists, and cannot find settings.php either. Please see documentation on how to configure the module.");
-            }
-
-
-            // set Drupal db prefix
-            if (config.containsKey("prefix")) {
-                String p = config.getProperty("prefix").trim();
-                if (p.length() != 0) {
-                    dbPrefix = p;
+    public void initDrupalConnection() {
+        //assert dataSource == null;  // assert that it hasn't been initialized yet.
+        if (dataSource != null) {
+            logger.warning("Drupal connection exists already. Check your code and make sure things are OK.");
+            return;
+        }
+        // if config already set, then skip reading config file.
+        if (!config.containsKey("username") && !config.containsKey("password")) {
+            try {
+                File configFile = new File(configFilePath);
+                File settingsPhpFile = getDefaultSettingsPhpFile();
+                if (configFile.exists()) {
+                    // read configuration file.
+                    Reader configReader = new FileReader(configFile);
+                    config.load(configReader);
+                } else if (settingsPhpFile.exists()) {
+                    // read settings.php file instead
+                    logger.info("Fallback using Drupal setting.php file.");
+                    loadSettingsPhp(settingsPhpFile);
+                } else {
+                    throw new DrupalRuntimeException("Database configuration file " + configFilePath + " doesn't exists, and cannot find settings.php either. Please see documentation on how to configure the module.");
                 }
+            } catch (IOException e) {
+                logger.severe("Error reading configuration file.");
+                throw new DrupalRuntimeException(e);
             }
+        }
 
-            maxBatchSize = config.containsKey("db_max_batch_size") ? Integer.parseInt(config.getProperty("db_max_batch_size")) : 0;
-            if (maxBatchSize > 0) {
-                logger.info("Batch SQL size: " + maxBatchSize);
+        // set Drupal db prefix
+        if (config.containsKey("prefix")) {
+            String p = config.getProperty("prefix").trim();
+            if (p.length() != 0) {
+                dbPrefix = p;
             }
+        }
 
+        maxBatchSize = config.containsKey("db_max_batch_size") ? Integer.parseInt(config.getProperty("db_max_batch_size")) : 0;
+        if (maxBatchSize > 0) {
+            logger.fine("Batch SQL size: " + maxBatchSize);
+        }
+
+        try {
             // create data source.
             dataSource = BasicDataSourceFactory.createDataSource(config);
-
-        } catch (IOException e) {
-            logger.severe("Error reading configuration file.");
-            throw new DrupalRuntimeException(e);
         } catch (Exception e) {
             logger.severe("Error initializing DataSource for Drupal database connection.");
             throw new DrupalRuntimeException(e);
         }
-        // test connection
+
+        // test Drupal connection
+        try {
+            //QueryRunner q = new QueryRunner(dataSource);
+            //List<Map<String, Object>> rows = q.query(d("SELECT * FROM {async_command} WHERE app=?"), new MapListHandler(), identifier());
+            //for (Map<String, Object> row : rows) {
+            //    System.out.println(row.get("id") + ":" + row.get("command"));
+            //}
+            // TODO-postponed: should use more sophisticated test on user privileges.
+            Connection conn = dataSource.getConnection();
+            DatabaseMetaData metaData = conn.getMetaData();
+            logger.info("Database connection successful: " + metaData.getDatabaseProductName() + metaData.getDatabaseProductVersion());
+            //ResultSet rs = metaData.getColumnPrivileges(null, null, d("{async_command}"), "id");
+        } catch (SQLException e) {
+            logger.severe("SQL error during testing connection. Cannot connect to database.");
+            throw new DrupalRuntimeException(e);
+        }
     }
+
+    public void initConfig(String configString) {
+        Reader configReader = new StringReader(configString);
+        try {
+            config.load(configReader);
+        } catch (IOException e) {
+            throw new DrupalRuntimeException("Cannot read config string.");
+        }
+    }
+
 
     /**
      * see drush/includes/environment.inc => drush_site_path()
@@ -222,6 +287,8 @@ abstract public class AbstractDrupalApp {
         }
     }
 
+    // FIXME: this is absorbed in initDrupalConnection.
+    @Deprecated
     public void testConnection() {
         initDrupalConnection();
         try {
@@ -298,6 +365,7 @@ abstract public class AbstractDrupalApp {
      * @throws SQLException
      */
     protected int update(String sql, Object... params) throws SQLException {
+        logger.fine("SQL UPDATE: " + sql);
         QueryRunner q = new QueryRunner(dataSource);
         int num = q.update(d(sql), params);
         return num;
@@ -305,6 +373,7 @@ abstract public class AbstractDrupalApp {
 
 
     protected int[] batch(String sql, Object[][] params) throws SQLException {
+        logger.fine("SQL BATCH: " + sql);
         Connection connection = dataSource.getConnection();
         connection.setAutoCommit(false);
         int[] num = batch(connection, sql, params);
@@ -327,6 +396,8 @@ abstract public class AbstractDrupalApp {
                 if (end > params.length) {
                     end = params.length;
                 }
+                // run batch query
+                logger.fine("Database batch processing: " + start + " to " + end);
                 int[] batchNum =  q.batch(connection, processedSql, Arrays.copyOfRange(params, start, end));
                 for (count=0; count<batchNum.length; count++) {
                     num[start+count] = batchNum[count];
@@ -335,6 +406,7 @@ abstract public class AbstractDrupalApp {
             } while (end < params.length);
             return num;
         } else {
+            logger.fine("Batch processing all.");
             return q.batch(connection, processedSql, params);
         }
     }
