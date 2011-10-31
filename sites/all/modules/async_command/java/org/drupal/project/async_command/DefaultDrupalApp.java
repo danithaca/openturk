@@ -162,6 +162,11 @@ public class DefaultDrupalApp extends AbstractDrupalApp {
             assertTrue(url.equals("jdbc:mysql://localhost/drupal7"));
         }
 
+        @Test
+        public void testRetrievePendingCommand() {
+            // TODO: write me.
+        }
+
         // native decryption program.
         /*public Result encryptionTest() throws DrupalRuntimeException {
             try {
