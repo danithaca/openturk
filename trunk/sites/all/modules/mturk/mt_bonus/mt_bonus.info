@@ -1,0 +1,15 @@
+name = AMT Bonus
+description = This module allows you to grant bonus to Amazon Mechanical Turk workers.
+package = Amazon Mechanical Turk Integration
+core = 7.x
+
+dependencies[] = mt_task
+
+files[] = mt_bonus.module
+
+; Information added by drupal.org packaging script on 2011-11-14
+version = "7.x-2.0-alpha1"
+core = "7.x"
+project = "mturk"
+datestamp = "1321231501"
+

@@ -1,0 +1,552 @@
+<?php
+
+/**
+ * @file
+ *   Amazon Mechanical Turk integration installation file.
+ */
+
+
+/**
+ * Implements hook_install();
+ */
+function mt_task_install() {
+  // config the mt_task "module" content type, which is defined by hook_node_info.
+  node_types_rebuild();
+  $types = node_type_get_types();
+  node_add_body_field($types['mt_task'], 'Description');
+  // Default options: not promoted.
+  variable_set('node_options_mt_task', array('status'));
+  
+  // create the "MT Properties" field using Encrypted Settings
+  $field = array(
+    'field_name' => 'mt_properties_secure',
+    'type' => 'encset', // encrypted setting from encset module
+    'entity_types' => array('node','user'), // can have instance in both node and user. access_id and secret_key can be saved in user's profile
+    'cardinality' => 1,
+    //'locked' => TRUE,  // users can't create instance
+    'settings' => array(
+      'encryption' => 'mcrypt',
+      'usage' => 'ini',
+    ),
+  );
+  field_create_field($field);
+  
+  // create instances to node and user.
+  $instances = array(
+    'mt_task' => array(
+      'field_name' => 'mt_properties_secure',
+      'label' => t('MT Properties'),
+      'entity_type' => 'node',
+      'bundle' => 'mt_task',
+      'description' => t('This field stores properties for the MT task, such as access_id, etc. The content of this field is encrypted, and only viewable when editting.'),
+      //'default_value' => array(array('value' => "access_key=\nsecret_key=")),
+      'widget' => array(
+        'type' => 'encset_textarea',
+      ),
+      'display' => array(
+        'default' => array(
+          'label' => 'hidden',
+          'type' => 'hidden',
+        ),
+      ),
+    ),
+    'user' => array(
+      'field_name' => 'mt_properties_secure',
+      'label' => t('MT Properties'),
+      'entity_type' => 'user',
+      'bundle' => 'user',
+      'description' => t('This field stores default MT properties for each user. The content of this field is encrypted, and only viewable when editting.'),
+      //'default_value' => array(''),
+      'widget' => array(
+        'type' => 'encset_textarea',
+      ),
+      'settings' => array(
+        'user_register_form' => TRUE,
+      ),
+      'display' => array(
+        'default' => array(
+          'label' => 'hidden',
+          'type' => 'hidden',
+        ),
+      ),
+    ),
+  );
+  foreach ($instances as $instance) {
+    field_create_instance($instance);
+  }
+	
+	// add 2 roles
+  $new_roles = array('requester', 'worker');
+  foreach ($new_roles as $r){
+    if(!user_role_load_by_name($r)){
+      $role = new stdClass();
+      $role->name = $r;
+      user_role_save($role);
+    }
+  }
+}
+
+
+/**
+ * Implements hook_uninstall().
+ */
+function mt_task_uninstall() {
+  // find mt_task node and delete
+  $result = db_query('SELECT nid FROM {node} n WHERE n.type = :type', array(':type' => 'mt_task'));
+  $nids = array();
+  foreach ($result as $row) {
+    $nids[] = $row->nid;
+  }
+  node_delete_multiple($nids);
+
+  // delete fields
+  foreach (array("mt_properties_secure") as $field) {
+    field_delete_field($field);
+  }
+
+  // delete instances
+  $instances = field_info_instances('node', 'mt_task');
+  $instances[] = field_info_instance('user', 'mt_properties_secure', 'user');
+  foreach ($instances as $instance_name => $instance) {
+    field_delete_instance($instance);
+  }
+
+  // Purge all field infromation
+  field_purge_batch(1000);
+	
+	// purge the 2 roles added.
+  $newRoles = array('requester', 'worker');
+  foreach ($newRoles as $r){
+    if($role = user_role_load_by_name($r)){
+      user_role_delete($r);
+    }
+  }
+}
+
+/**
+ * Implementation of hook_schema()
+ */
+function mt_task_schema() {
+  $schema = array();
+
+  $schema['mt_hit_type'] = array(
+    'description' => 'This is the table to store HIT Types from AMT.',
+    'fields' => array(
+      'hit_type_id' => array(
+        'description' => 'The HIT Type ID. length is 30',
+        'type' => 'char',
+        'not null' => TRUE,
+        'length' => 30,
+      ),
+      'title' => array(
+        'description' => 'The HIT Type title',
+        'type' => 'varchar',
+        'not null' => TRUE,
+        'length' => 200,
+      ),
+      'reward_amount' => array(
+        'description' => 'The reward of the HIT Type.',
+        'type' => 'numeric',
+        'unsigned' => TRUE,
+        'precision' => 10,
+        'scale' => 2,
+        'not null' => TRUE,
+      ),
+      'reward_currency' => array(
+        'description' => 'The HIT Type ID. length is 30',
+        'type' => 'char',
+        'not null' => TRUE,
+        'length' => 3,
+      ),
+      'assignment_duration' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'description' => "getAssignmentDuration()",
+      ),
+      'auto_approval_delay' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'description' => "getAutoApprovalDelay()",
+      ),
+      'description' => array(
+        'type' => 'text',
+        'not null' => FALSE,
+        'description' => "description of the hit type",
+      ),
+      'keywords' => array(
+        'type' => 'text',
+        'not null' => FALSE,
+        'description' => "keywords of the hit type",
+      ),
+      'updated' => array(
+        'description' => 'The Unix timestamp this HIT loaded into openturk system and updated.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('hit_type_id'),
+  );
+
+  $schema['mt_hit'] = array(
+    'description' => 'This is the table to store HITs from AMT.',
+    'fields' => array(
+      'hit_id' => array(
+        'description' => 'The HIT ID. length is 30',
+        'type' => 'char',
+        'not null' => TRUE,
+        'length' => 30,
+      ),
+      'hit_type_id' => array(
+        'description' => 'The HIT Type ID. length is 30',
+        'type' => 'char',
+        'not null' => TRUE,
+        'length' => 30,
+      ),
+      'annotation_id' => array(
+        'description' => "The HIT's annotation ID. length is variable",
+        'type' => 'varchar',
+        'not null' => FALSE,
+        'length' => 100,
+      ),
+      'question' => array(
+        'type' => 'text',
+        'not null' => FALSE,
+        'description' => "Question of this HIT.",
+      ),
+      'hit_review_status' => array(
+        'description' => "The HIT's review status. Should be an enum, but use varchar temporarily.",
+        'type' => 'varchar',
+        'not null' => FALSE,
+        'length' => 30,
+      ),
+      'hit_status' => array(
+        'description' => "The HIT's status. Should be an enum, but use varchar temporarily.",
+        'type' => 'varchar',
+        'not null' => FALSE,
+        'length' => 30,
+      ),
+      'max_assignments' => array(
+        'type' => 'int',
+        'not null' => FALSE,
+        'description' => "Max assignments of a HIT. Will get updated periodically.",
+      ),
+      'hit_creation' => array(
+        'description' => 'The Unix timestamp this HIT was created on AMT',
+        'type' => 'int',
+        'not null' => TRUE,
+      ),
+      'hit_expiration' => array(
+        'description' => 'The Unix timestamp this HIT would expire',
+        'type' => 'int',
+        'not null' => TRUE,
+      ),
+      'updated' => array(
+        'description' => 'The Unix timestamp this HIT loaded into openturk system and updated.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('hit_id'),
+    'indexes' => array(
+      'mt_hit_index' => array('hit_type_id', 'hit_id'),
+    ),
+    'foreign keys' => array(
+      'mt_hit_type' => array(
+        'table' => 'mt_hit_type',
+        'columns' => array('hit_type_id' => 'hit_type_id'),
+      ),
+    ),
+  );
+
+  $schema['mt_task_hit'] = array(
+    'description' => 'This is the table to store HITs <-> Task mapping.',
+    'fields' => array(
+      'task_id' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'description' => "The node_id of the node that represents an AMT task",
+      ),
+      'hit_id' => array(
+        'description' => 'The HIT ID. length is 30',
+        'type' => 'char',
+        'not null' => TRUE,
+        'length' => 30,
+      ),
+      'updated' => array(
+        'description' => 'The Unix timestamp this HIT<->Task mapping is loaded or updated.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('task_id', 'hit_id'),
+    'foreign keys' => array(
+      'mt_task' => array(
+        'table' => 'node',
+        'columns' => array('task_id' => 'nid'),
+      ),
+      'mt_hit' => array(
+        'table' => 'mt_hit',
+        'columns' => array('hit_id' => 'hit_id'),
+      ),
+    ),
+  );
+
+  $schema['mt_assignment'] = array(
+    'description' => 'This is the table to store HIT assignments from AMT.',
+    'fields' => array(
+      'assignment_id' => array(
+        'description' => 'The HIT assignment ID. lenght is 30',
+        'type' => 'char',
+        'not null' => TRUE,
+        'length' => 30,
+      ),
+      'hit_id' => array(
+        'description' => 'The HIT ID. length is 30',
+        'type' => 'char',
+        'not null' => TRUE,
+        'length' => 30,
+      ),
+      'worker_id' => array(
+        'description' => 'The worker id who submitted the assignment. length is 14',
+        'type' => 'char',
+        'not null' => TRUE,
+        'length' => 14,
+      ),
+      'assignment_status' => array(
+        'description' => 'Status of the assignment. Updatable.',
+        'type' => 'varchar',
+        'not null' => FALSE,
+        'length' => 10,
+      ),
+      'accept_time' => array(
+        'description' => 'The Unix timestamp when the HIT was accepted by the worker',
+        'type' => 'int',
+        'not null' => FALSE,
+      ),
+      'submit_time' => array(
+        'description' => 'The Unix timestamp when the HIT was submitted by the worker',
+        'type' => 'int',
+        'not null' => FALSE,
+      ),
+      'approval_time' => array(
+        'description' => 'The Unix timestamp when the HIT was approved by requester.',
+        'type' => 'int',
+        'not null' => FALSE,
+      ),
+      'rejection_time' => array(
+        'description' => 'The Unix timestamp when the HIT was approved by requester.',
+        'type' => 'int',
+        'not null' => FALSE,
+      ),
+      'answer' => array(
+        'description' => 'The original answer from the work for this HIT',
+        'type' => 'text',
+        'not null' => FALSE,
+      ),
+      'answer_json' => array(
+        'description' => 'The answer from the work for this HIT, parsed into JSON for convenience',
+        'type' => 'text',
+        'not null' => FALSE,
+      ),
+      'requester_feedback' => array(
+        'description' => 'The feedback from the requester regarding this assignment.',
+        'type' => 'text',
+        'not null' => FALSE,
+      ),
+      'updated' => array(
+        'description' => 'The Unix timestamp this record is updated',
+        'type' => 'int',
+        'not null' => TRUE,
+      ),
+     ),
+    'primary key' => array('assignment_id'),
+    'indexes' => array(
+      'mt_assignment_index' => array('hit_id', 'worker_id'),
+    ),
+    'foreign keys' => array(
+      'mt_hit' => array(
+        'table' => 'mt_hit',
+        'columns' => array('hit_id' => 'hit_id'),
+      ),
+      'mt_worker' => array(
+        'table' => 'mt_worker',
+        'columns' => array('worker_id' => 'worker_id'),
+      ),
+    ),
+  );
+
+  $schema['mt_worker'] = array(
+    'description' => 'This is the table to store AMT worker info. Not all worker has registered user in openturk system.',
+    'fields' => array(
+      'worker_id' => array(
+        'description' => 'The worker id. length is 14',
+        'type' => 'char',
+        'not null' => TRUE,
+        'length' => 14,
+      ),
+      'user_id' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => "The uid of the user in openturk that registered with the worker_id. See also #1148280",
+      ),
+      'display_name' => array(
+        'type' => 'varchar',
+        'length' => 60,
+        'not null' => TRUE,
+        'description' => 'Unique display name for this user. If user exists, use name in {users}',
+      ),
+      'reputation' => array(
+        'description' => 'The overall reputation score: 0~1.0 from openturk system. NULL means not computed yet.',
+        'type' => 'float',
+        'not null' => FALSE,
+      ),
+      'assignments_approved' => array(
+        'description' => 'Total # of assignments approved for this worker in the system.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'assignments_rejected' => array(
+        'description' => 'Total # of assignments rejected for this worker in the system.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'working_time_total' => array(
+        'description' => 'Total seconds the worker has spent on all HITs in the system.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'updated' => array(
+        'description' => 'The Unix timestamp this HIT<->Task mapping is loaded or updated.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('worker_id'),
+    'unique keys' => array(
+      'display_name' => array('display_name'),
+    ),
+    'foreign keys' => array(
+      'user' => array(
+        'table' => 'users',
+        'columns' => array('user_id' => 'uid'),
+      ),
+    ),
+  );
+  
+  $schema['mt_message'] = array(
+    'description' => 'This is the table to store message sent history.',
+    'fields' => array(
+      'message_id' => array(
+        'description' => 'Unique id for the messaging history',
+        'type' => 'serial',
+        'size' => 'normal',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'task_id' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'description' => 'The task_id where this message is associated.',
+      ),
+      'subject' => array(
+        'description' => 'The subject to send to the worker.',
+        'type' => 'varchar',
+        'length' => '200',
+        'not null' => TRUE,
+      ),
+      'message' => array(
+        'description' => 'The message to send to the worker.',
+        'type' => 'varchar',
+        'length' => '1000',
+        'not null' => TRUE,
+      ),
+      'execution_id' => array(
+        'description' => 'The id of async_command to be executed.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => FALSE,
+      ),
+      'created' => array(
+        'description' => 'The Unix timestamp this bonus is created.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('message_id'),
+    'foreign keys' => array(
+      'task_id' => array(
+        'table' => 'node',
+        'columns' => array('task_id' => 'nid'),
+      ),
+      'execution_id' => array(
+        'table' => 'async_command',
+        'columns' => array('execution_id' => 'id'),
+      ),
+    ),
+  );
+  
+  $schema['mt_message_worker'] = array(
+    'description' => 'This is the message<->recipient table. many-to-many',
+    'fields' => array(
+      'message_id' => array(
+        'description' => 'Unique id for the message',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'worker_id' => array(
+        'description' => 'The worker id for the message recipient. length is 14',
+        'type' => 'char',
+        'not null' => TRUE,
+        'length' => 14,
+      ),
+    ),
+    'primary key' => array('message_id', 'worker_id'),
+    'foreign keys' => array(
+      'message_id' => array(
+        'table' => 'mt_message',
+        'columns' => array('message_id' => 'message_id'),
+      ),
+      'worker_id' => array(
+        'table' => 'mt_worker',
+        'columns' => array('worker_id' => 'worker_id'),
+      ),
+    ),
+  );
+
+  return $schema;
+}
+
+
+/**
+ * Implements hook_update_N().
+ * Add answer_json to the {mt_assignment} table.
+ */
+function mt_task_update_7001() {
+  //db_drop_primary_key('mt_assignment');
+  //db_change_field('mt_assignment');
+  db_add_field('mt_assignment', 'answer_json', array(
+    'description' => 'The answer from the work for this HIT, parsed into JSON for convenience',
+    'type' => 'text',
+    'not null' => FALSE,
+  ));
+}
+
+/**
+ * Implements hook_update_N().
+ * Add {mt_message}
+ */
+function mt_task_update_7002() {
+  $schema = mt_task_schema();
+  db_create_table('mt_message', $schema['mt_message']);
+  db_create_table('mt_message_worker', $schema['mt_message_worker']);
+}  
