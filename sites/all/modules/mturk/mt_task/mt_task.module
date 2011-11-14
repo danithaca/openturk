@@ -341,7 +341,7 @@ function mt_task_access($task_id) {
  */
 function mt_task_cron() {
   // by default, avoid duplicate
-  async_command_create_command('mt_task', 'UpdateWorker', array('uid' => 0));
+  async_command_create_command('mturk', 'UpdateWorker', array('uid' => 1));
   // mt_task_assign_role();
 }
 

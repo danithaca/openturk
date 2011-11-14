@@ -162,7 +162,7 @@ class LoadHits(LoadAllHits):
       hit = self.service.getHIT(hit.getHITId())
       self.save_hit_to_db(hit)
       # set reviewing so we don't retrieve it again.
-      print 'Set reviewing status:', hit.getHITId()
+      #print 'Set reviewing status:', hit.getHITId()
       self.service.setHITAsReviewing(hit.getHITId())
       hit.setHITStatus(HITStatus.Reviewing)
 
@@ -258,7 +258,7 @@ class UpdateWorker(MTurkComputeCommand):
     rows = self.db.queryArray('SELECT uid, name, mt_properties_secure_value FROM {users} u INNER JOIN {field_data_mt_properties_secure} f \
       ON u.uid=f.entity_id WHERE entity_type="user" AND bundle="user"')
     for uid, name, value in rows:
-      mt_settings = self.encryption.readSettings[value]
+      mt_settings = self.encryption.readSettings(value)
       worker_id = mt_settings['worker_id']
       if worker_id != None:
         worker_id = worker_id.strip()
