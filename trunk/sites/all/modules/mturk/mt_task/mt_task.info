@@ -11,8 +11,8 @@ files[] = mt_task.module
 files[] = mt_task.views_default.inc
 
 ; Information added by drupal.org packaging script on 2011-11-14
-version = "7.x-2.0-alpha1"
+version = "7.x-2.0-alpha2"
 core = "7.x"
 project = "mturk"
-datestamp = "1321231501"
+datestamp = "1321287337"
 
