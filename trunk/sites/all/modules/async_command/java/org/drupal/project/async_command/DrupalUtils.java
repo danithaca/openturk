@@ -21,7 +21,7 @@ public final class DrupalUtils {
     /**
      * Version string to keep track of jar changes.
      */
-    public final static String VERSION = "7_2_6";
+    public final static String VERSION = "7_2_7";
 
     /**
      * @return Default logger for the whole package.

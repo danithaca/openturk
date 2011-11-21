@@ -5,7 +5,6 @@ import org.drupal.project.async_command.exception.ConfigLoadingException;
 import org.drupal.project.async_command.exception.DrupalAppException;
 
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.util.logging.Logger;
@@ -116,12 +115,6 @@ public class CommandLineLauncher {
                 throw new ConfigLoadingException("Config file at '" + configFile.getPath() + "' does not exist.");
             }
             logger.info("Set configuration file as: " + configFile.getPath());
-        } else {
-            try {
-                configFile = DrupalUtils.getConfigPropertiesFile();
-            } catch (FileNotFoundException e) {
-                throw new ConfigLoadingException("Cannot find config.properties under default folders. Use -c to specify the location of config.properties.", e);
-            }
         }
 
         if (shellCommand.hasOption('r')) {
@@ -143,8 +136,13 @@ public class CommandLineLauncher {
     }
 
     private void constructDrupalApp() {
+        DrupalConnection drupalConnection;
+        if (configFile != null && configFile.exists()) {
+            drupalConnection = new DrupalConnection(configFile);
+        } else {
+            drupalConnection = DrupalConnection.create();
+        }
 
-        DrupalConnection drupalConnection = new DrupalConnection(configFile);
         try {
             Constructor<GenericDrupalApp> constructor = drupalAppClass.getConstructor(DrupalConnection.class);
             drupalApp = constructor.newInstance(drupalConnection);
