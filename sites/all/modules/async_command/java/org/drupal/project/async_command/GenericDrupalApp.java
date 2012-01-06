@@ -324,4 +324,8 @@ public class GenericDrupalApp implements Runnable {
             record.persistResult();
         }
     }
+
+    public Properties getConfig() {
+        return config;
+    }
 }
