@@ -21,7 +21,7 @@ public final class DrupalUtils {
     /**
      * Version string to keep track of jar changes.
      */
-    public final static String VERSION = "7_2_7";
+    public final static String VERSION = "7_2_9";
 
     /**
      * @return Default logger for the whole package.
@@ -139,7 +139,7 @@ public final class DrupalUtils {
      * @param stringValue
      * @return
      */
-    public static byte[] convertStringToBlog(String stringValue) {
+    public static byte[] convertStringToBlob(String stringValue) {
         if (stringValue == null) {
             return null;
         } else{
@@ -191,7 +191,10 @@ public final class DrupalUtils {
         File drupalHome = null;
         try {
             drupalHome = getFileFromEnv("DRUPAL_HOME");
-        } catch (FileNotFoundException e) {}
+            logger.info("DRUPAL_HOME is set to: " + drupalHome.getPath());
+        } catch (FileNotFoundException e) {
+            logger.warning("Please set DRUPAL_HOME.");
+        }
 
         File theFile;
         String identityStr = "sites" + File.separator + "all" + File.separator + "modules" + File.separator;
@@ -300,7 +303,7 @@ public final class DrupalUtils {
         config.put("mcrypt_secret_key", secretKey);
 
         // put drupal version into it.
-        config.put("drupal_version", '7');
+        config.setProperty("drupal_version", "7");
 
         return config;
     }

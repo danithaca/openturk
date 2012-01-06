@@ -69,6 +69,10 @@ function async_command_update_7201() {
   drupal_install_schema('async_command');
 }
 
+/**
+ * Implements hook_update_N().
+ * Remove 'dependency' field.
+ */
 function async_command_update_7202() {
   db_drop_field('async_command', 'dependency');
 }
